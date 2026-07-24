@@ -53,6 +53,7 @@ export function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setErr(null);
+    setMsg(null);
     try {
       setSkripsi(await uploadSkripsi(file));
       setMsg("Skripsi diunggah.");
@@ -63,8 +64,15 @@ export function SettingsPage() {
   }
 
   async function onDeleteSkripsi() {
-    await deleteSkripsi();
-    setSkripsi(null);
+    setErr(null);
+    setMsg(null);
+    try {
+      await deleteSkripsi();
+      setSkripsi(null);
+      setMsg("Skripsi dihapus.");
+    } catch (e) {
+      setErr((e as Error).message);
+    }
   }
 
   return (
