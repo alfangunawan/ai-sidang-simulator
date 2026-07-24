@@ -10,7 +10,7 @@ export function buildApp(db: Database.Database, key: Buffer): express.Express {
   seedDefaults(db);
 
   const app = express();
-  app.use(cors());
+  app.use(cors({ origin: "http://localhost:5173" }));
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => {
@@ -20,6 +20,14 @@ export function buildApp(db: Database.Database, key: Buffer): express.Express {
   app.use("/settings", settingsRouter(db, key));
   app.use("/sessions", sessionsRouter(db, key));
   app.use("/skripsi", skripsiRouter(db));
+
+  app.use(
+    (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      console.error("[unhandled]", (err as Error)?.message);
+      if (res.headersSent) return;
+      res.status(500).json({ error: "Kesalahan server" });
+    },
+  );
 
   return app;
 }

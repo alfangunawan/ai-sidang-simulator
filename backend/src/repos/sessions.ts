@@ -51,3 +51,14 @@ export function addTurn(
 export function deleteSession(db: Database.Database, sessionId: string): void {
   db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
 }
+
+export function deleteTurn(
+  db: Database.Database,
+  sessionId: string,
+  turnNumber: number,
+): void {
+  db.prepare("DELETE FROM turns WHERE session_id = ? AND turn_number = ?").run(
+    sessionId,
+    turnNumber,
+  );
+}

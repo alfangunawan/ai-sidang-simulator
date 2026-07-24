@@ -12,6 +12,7 @@ import {
   nextTurnNumber,
   addTurn,
   deleteSession,
+  deleteTurn,
 } from "../repos/sessions.js";
 
 export function sessionsRouter(
@@ -50,9 +51,11 @@ export function sessionsRouter(
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
 
+    let userTurnNumber: number | undefined;
     try {
       const history = getTurns(db, sessionId);
-      addTurn(db, sessionId, nextTurnNumber(db, sessionId), "user", transcript, now());
+      userTurnNumber = nextTurnNumber(db, sessionId);
+      addTurn(db, sessionId, userTurnNumber, "user", transcript, now());
 
       const cfg = getActiveConfig(db, key);
       const provider = getProvider(cfg);
@@ -80,6 +83,9 @@ export function sessionsRouter(
     } catch (err) {
       // Never leak provider internals / keys.
       console.error("[turn error]", (err as Error).message);
+      if (userTurnNumber !== undefined) {
+        deleteTurn(db, sessionId, userTurnNumber);
+      }
       res.status(500).json({ error: "Gagal memanggil penguji AI" });
     }
   });

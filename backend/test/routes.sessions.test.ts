@@ -77,6 +77,37 @@ describe("sessions routes", () => {
     expect(res.body.error).toMatch(/skripsi/i);
   });
 
+  it("provider failure leaves no orphaned user turn", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        text: async () => "err",
+      })) as any,
+    );
+    const app = ready();
+    const created = await request(app).post("/sessions").send({});
+    const id = created.body.session_id;
+
+    const turn = await request(app)
+      .post(`/sessions/${id}/turn`)
+      .send({ transcript: "Ini jawaban saya." });
+    expect(turn.status).toBe(500);
+    expect(turn.body.error).toBeTruthy();
+
+    const turns = await request(app).get(`/sessions/${id}/turns`);
+    expect(turns.body.turns).toEqual([]);
+  });
+
+  it("404s a turn for an unknown session", async () => {
+    const app = ready();
+    const res = await request(app)
+      .post("/sessions/does-not-exist/turn")
+      .send({ transcript: "halo" });
+    expect(res.status).toBe(404);
+  });
+
   it("deletes a session and cascades its turns", async () => {
     vi.stubGlobal(
       "fetch",

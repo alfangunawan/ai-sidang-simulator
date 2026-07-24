@@ -10,7 +10,14 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
   });
 
   r.post("/", (req, res) => {
-    saveSettings(db, key, req.body ?? {});
+    const body = req.body ?? {};
+    const fields = ["provider", "model", "api_key", "attack_points"] as const;
+    for (const field of fields) {
+      if (field in body && typeof body[field] !== "string") {
+        return res.status(400).json({ error: "Field harus berupa string" });
+      }
+    }
+    saveSettings(db, key, body);
     res.json(getSettingsView(db));
   });
 
