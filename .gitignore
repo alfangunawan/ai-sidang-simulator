@@ -1,0 +1,22 @@
+# deps
+node_modules/
+**/node_modules/
+
+# build
+dist/
+build/
+**/dist/
+
+# secrets & local data (CRITICAL — never commit)
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+*.db
+backend/data/
+backend/uploads/
+
+# misc
+.DS_Store
+*.log
