@@ -4,6 +4,7 @@ import type Database from "better-sqlite3";
 import { seedDefaults } from "./repos/settings.js";
 import { settingsRouter } from "./routes/settings.js";
 import { sessionsRouter } from "./routes/sessions.js";
+import { skripsiRouter } from "./routes/skripsi.js";
 
 export function buildApp(db: Database.Database, key: Buffer): express.Express {
   seedDefaults(db);
@@ -18,6 +19,7 @@ export function buildApp(db: Database.Database, key: Buffer): express.Express {
 
   app.use("/settings", settingsRouter(db, key));
   app.use("/sessions", sessionsRouter(db, key));
+  app.use("/skripsi", skripsiRouter(db));
 
   return app;
 }
