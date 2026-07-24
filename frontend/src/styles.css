@@ -1,0 +1,14 @@
+:root { font-family: system-ui, sans-serif; }
+body { margin: 0; background: #faf9f6; color: #1a1a1a; }
+.app { max-width: 720px; margin: 0 auto; padding: 1.5rem; }
+.bubble { padding: .75rem 1rem; border-radius: .75rem; margin: .5rem 0; white-space: pre-wrap; }
+.bubble.user { background: #dbeafe; text-align: right; }
+.bubble.examiner { background: #f3e8d8; }
+button { cursor: pointer; padding: .5rem 1rem; border-radius: .5rem; border: 1px solid #999; }
+button.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.rec { background: #dc2626; color: #fff; border-color: #dc2626; }
+textarea, input, select { width: 100%; padding: .5rem; margin: .25rem 0 .75rem; box-sizing: border-box; }
+.error { color: #dc2626; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; }
+.modal { background: #fff; padding: 1.5rem; border-radius: .75rem; max-width: 360px; }
+nav { display: flex; gap: .5rem; margin-bottom: 1rem; }
