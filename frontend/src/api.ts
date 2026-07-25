@@ -6,6 +6,7 @@ import type {
   TtsVoice,
   TtsAudio,
   TestResult,
+  Assessment,
 } from "./types.js";
 
 function postJson(url: string, body: unknown): Promise<Response> {
@@ -48,13 +49,31 @@ export async function listSessions(): Promise<SessionSummary[]> {
   return (await jsonOrThrow(await fetch("/api/sessions"))).sessions;
 }
 
-export async function postTurn(id: string, transcript: string): Promise<string> {
+export async function postTurn(
+  id: string,
+  transcript: string,
+): Promise<{ reply: string; propose_close: boolean }> {
   const res = await fetch(`/api/sessions/${id}/turn`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ transcript }),
   });
-  return (await jsonOrThrow(res)).reply;
+  const data = await jsonOrThrow(res);
+  return { reply: data.reply, propose_close: !!data.propose_close };
+}
+
+export async function continueSession(id: string): Promise<void> {
+  await jsonOrThrow(await postJson(`/api/sessions/${id}/continue`, {}));
+}
+
+export async function closeSession(id: string): Promise<Assessment> {
+  return (await jsonOrThrow(await postJson(`/api/sessions/${id}/close`, {}))).assessment;
+}
+
+export async function getResult(
+  id: string,
+): Promise<{ status: string; assessment: Assessment | null }> {
+  return jsonOrThrow(await fetch(`/api/sessions/${id}/result`));
 }
 
 export async function deleteSession(id: string): Promise<void> {

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   postTurn,
+  continueSession,
+  closeSession,
+  getResult,
   uploadSkripsi,
   ttsSpeak,
   getTtsVoices,
@@ -12,12 +15,41 @@ import {
 afterEach(() => vi.restoreAllMocks());
 
 describe("api client", () => {
-  it("postTurn returns the reply", async () => {
+  it("postTurn returns reply + propose_close", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, json: async () => ({ reply: "Q?" }) })) as any,
+      vi.fn(async () => ({ ok: true, json: async () => ({ reply: "Q?", propose_close: true }) })) as any,
     );
-    expect(await postTurn("s1", "jawaban")).toBe("Q?");
+    expect(await postTurn("s1", "jawaban")).toEqual({ reply: "Q?", propose_close: true });
+  });
+
+  it("closeSession returns the assessment", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ assessment: { final_score: 80 } }) })) as any,
+    );
+    expect(await closeSession("s1")).toEqual({ final_score: 80 });
+  });
+
+  it("continueSession POSTs and resolves", async () => {
+    const captured: { url?: string } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        captured.url = url;
+        return { ok: true, json: async () => ({ ok: true }) };
+      }) as any,
+    );
+    await continueSession("s1");
+    expect(captured.url).toContain("/api/sessions/s1/continue");
+  });
+
+  it("getResult returns status + assessment", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ status: "closed", assessment: null }) })) as any,
+    );
+    expect(await getResult("s1")).toEqual({ status: "closed", assessment: null });
   });
 
   it("throws the server error message on non-2xx", async () => {

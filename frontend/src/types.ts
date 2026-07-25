@@ -39,4 +39,21 @@ export interface SessionSummary {
   created_at: string;
   label: string | null;
   turn_count: number;
+  status: string;
+  final_score: number | null;
+}
+export interface Assessment {
+  scores: {
+    penguasaan_materi: number;
+    metodologi: number;
+    kualitas_orisinalitas: number;
+    argumentasi: number;
+  };
+  final_score: number;
+  grade: string;
+  verdict: string;
+  ringkasan: string;
+  kelebihan: string[];
+  kekurangan: string[];
+  saran: string[];
 }
