@@ -9,6 +9,14 @@ export class OpenRouterProvider implements LLMProvider {
     private model: string,
   ) {}
 
+  async checkAuth(): Promise<void> {
+    // Validates the key without generating tokens.
+    const res = await fetch("https://openrouter.ai/api/v1/key", {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) throw new Error(`OpenRouter auth failed (${res.status})`);
+  }
+
   async sendTurn(
     personaAttack: string,
     skripsi: string,

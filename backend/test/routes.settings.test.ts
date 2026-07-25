@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { randomBytes } from "node:crypto";
 import request from "supertest";
 import { buildApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
 import { getSetting } from "../src/repos/settings.js";
+
+afterEach(() => vi.restoreAllMocks());
 
 function app() {
   const db = openDb(":memory:");
@@ -51,6 +53,42 @@ describe("settings routes", () => {
     expect(res.body.tts_voice).toBe("");
     expect(res.body.has_google_tts_key).toBe(false);
     expect(res.body.has_openai_tts_key).toBe(false);
+  });
+
+  it("POST /test-llm returns ok when the provider is reachable (typed key)", async () => {
+    const captured: { url?: string; auth?: string } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: any) => {
+        captured.url = url;
+        captured.auth = init.headers.Authorization;
+        return { ok: true, status: 200 } as any;
+      }),
+    );
+    const { app: a } = app();
+    const res = await request(a)
+      .post("/settings/test-llm")
+      .send({ provider: "openrouter", model: "x/y", api_key: "typed-key" });
+    expect(res.body).toEqual({ ok: true });
+    expect(captured.auth).toBe("Bearer typed-key"); // uses the typed key, not saved
+  });
+
+  it("POST /test-llm reports a missing key", async () => {
+    const { app: a } = app();
+    const res = await request(a)
+      .post("/settings/test-llm")
+      .send({ provider: "openrouter", model: "x/y" });
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error).toMatch(/key/i);
+  });
+
+  it("POST /test-llm reports failure on a bad key", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 401 })) as any);
+    const { app: a } = app();
+    const res = await request(a)
+      .post("/settings/test-llm")
+      .send({ provider: "openrouter", model: "x/y", api_key: "bad" });
+    expect(res.body.ok).toBe(false);
   });
 
   it("POST stores a TTS provider, voice, and an encrypted Google key without leaking it", async () => {

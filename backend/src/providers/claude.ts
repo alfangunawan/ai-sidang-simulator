@@ -11,6 +11,11 @@ export class ClaudeProvider implements LLMProvider {
     this.model = model;
   }
 
+  async checkAuth(): Promise<void> {
+    // Validates the key without generating tokens.
+    await this.client.models.list();
+  }
+
   async sendTurn(
     personaAttack: string,
     skripsi: string,

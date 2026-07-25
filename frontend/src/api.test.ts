@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { postTurn, uploadSkripsi, ttsSpeak, getTtsVoices } from "./api.js";
+import {
+  postTurn,
+  uploadSkripsi,
+  ttsSpeak,
+  getTtsVoices,
+  testLlm,
+  testTts,
+  ttsPreview,
+} from "./api.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -62,6 +70,48 @@ describe("api client", () => {
     );
     expect(await getTtsVoices("openai")).toEqual([{ name: "nova", type: "OpenAI" }]);
     expect(captured.url).toContain("provider=openai");
+  });
+
+  it("testLlm posts the body and returns the result", async () => {
+    const captured: { url?: string; body?: any } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: any) => {
+        captured.url = url;
+        captured.body = JSON.parse(init.body);
+        return { ok: true, json: async () => ({ ok: false, error: "bad key" }) };
+      }) as any,
+    );
+    expect(await testLlm({ provider: "openrouter", api_key: "k" })).toEqual({
+      ok: false,
+      error: "bad key",
+    });
+    expect(captured.url).toContain("/api/settings/test-llm");
+    expect(captured.body).toEqual({ provider: "openrouter", api_key: "k" });
+  });
+
+  it("testTts hits the tts test endpoint", async () => {
+    const captured: { url?: string } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        captured.url = url;
+        return { ok: true, json: async () => ({ ok: true }) };
+      }) as any,
+    );
+    expect(await testTts({ provider: "google" })).toEqual({ ok: true });
+    expect(captured.url).toContain("/api/tts/test");
+  });
+
+  it("ttsPreview returns the audio payload", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ audio: "QQ==", mime: "audio/mpeg" }) })) as any,
+    );
+    expect(await ttsPreview({ provider: "google", voice: "v" })).toEqual({
+      audio: "QQ==",
+      mime: "audio/mpeg",
+    });
   });
 
   it("uploadSkripsi posts multipart FormData", async () => {

@@ -105,6 +105,12 @@ export function saveSettings(
   }
 }
 
+// Decrypted LLM API key, or null when unset.
+export function getLlmKey(db: Database.Database, key: Buffer): string | null {
+  const enc = getSetting(db, "api_key");
+  return enc ? decrypt(enc, key) : null;
+}
+
 // Decrypted API key for a TTS provider, or null when unset / not applicable.
 export function getTtsKey(
   db: Database.Database,

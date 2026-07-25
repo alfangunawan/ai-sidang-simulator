@@ -4,7 +4,7 @@ import { openaiSynth } from "./openai.js";
 
 export type { TtsConfig, TtsResult, TtsVoice } from "./types.js";
 export { googleSynth, googleVoices } from "./google.js";
-export { openaiSynth, OPENAI_VOICES } from "./openai.js";
+export { openaiSynth, openaiCheckAuth, OPENAI_VOICES } from "./openai.js";
 
 export async function synthesize(cfg: TtsConfig, text: string): Promise<TtsResult> {
   switch (cfg.provider) {

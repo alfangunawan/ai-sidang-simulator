@@ -12,6 +12,14 @@ export const OPENAI_VOICES: TtsVoice[] = [
   { name: "shimmer", type: "OpenAI" },
 ];
 
+// Auth/connection check for the OpenAI TTS key — lists models, no synthesis.
+export async function openaiCheckAuth(apiKey: string): Promise<void> {
+  const res = await fetch("https://api.openai.com/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`OpenAI auth failed (${res.status})`);
+}
+
 export async function openaiSynth(
   text: string,
   voice: string,

@@ -73,6 +73,45 @@ describe("SettingsPage", () => {
     );
   });
 
+  it("shows Terhubung after a successful LLM connection test", async () => {
+    vi.spyOn(api, "testLlm").mockResolvedValue({ ok: true });
+    render(<SettingsPage />);
+    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("Tes Koneksi"));
+
+    expect(await screen.findByText(/Terhubung/)).toBeTruthy();
+  });
+
+  it("previews the selected Google voice by playing returned audio", async () => {
+    vi.spyOn(api, "getTtsVoices").mockResolvedValue([
+      { name: "id-ID-Chirp3-HD-Kore", type: "Chirp3-HD" },
+    ]);
+    const preview = vi
+      .spyOn(api, "ttsPreview")
+      .mockResolvedValue({ audio: "QUJD", mime: "audio/mpeg" });
+    const play = vi.fn().mockResolvedValue(undefined);
+    (globalThis as any).Audio = vi.fn().mockImplementation(() => ({ play }));
+
+    render(<SettingsPage />);
+    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+
+    const ttsSelect = (
+      await screen.findByText("Google Cloud (Neural2 / Chirp3-HD)")
+    ).closest("select") as HTMLSelectElement;
+    fireEvent.change(ttsSelect, { target: { value: "google" } });
+
+    await screen.findByText("id-ID-Chirp3-HD-Kore");
+    fireEvent.click(screen.getByText(/Preview/));
+
+    await waitFor(() =>
+      expect(preview).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "google", voice: "id-ID-Chirp3-HD-Kore" }),
+      ),
+    );
+    expect(play).toHaveBeenCalled();
+  });
+
   it("keeps skripsi state and shows error when delete fails", async () => {
     vi.spyOn(api, "getSkripsi").mockResolvedValue({
       filename: "x.pdf",

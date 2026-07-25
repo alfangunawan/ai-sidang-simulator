@@ -278,6 +278,11 @@ textarea, input, select {
 
 .error { color: var(--danger); margin-top: .75rem; }
 .hint { color: var(--ink-soft); font-size: .85rem; margin: .1rem 0 .75rem; }
+.ok { color: #15803d; font-size: .9rem; font-weight: 600; }
+.test-row { display: flex; align-items: center; gap: .6rem; margin: 0 0 .75rem; flex-wrap: wrap; }
+.voice-row { display: flex; align-items: flex-start; gap: .5rem; }
+.voice-row select { flex: 1; }
+.voice-row button { flex-shrink: 0; }
 
 /* ---- modal ---- */
 .modal-backdrop {

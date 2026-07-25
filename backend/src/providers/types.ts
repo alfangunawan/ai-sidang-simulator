@@ -15,4 +15,6 @@ export interface LLMProvider {
     history: Turn[],
     userInput: string,
   ): Promise<LLMResult>;
+  // Lightweight auth/connection check. Resolves on success, throws on failure.
+  checkAuth(): Promise<void>;
 }

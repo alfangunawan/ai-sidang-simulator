@@ -25,6 +25,10 @@ export interface TtsAudio {
   audio: string;
   mime: string;
 }
+export interface TestResult {
+  ok: boolean;
+  error?: string;
+}
 export interface SkripsiInfo {
   filename: string;
   char_count: number;

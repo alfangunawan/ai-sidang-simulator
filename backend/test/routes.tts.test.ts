@@ -53,6 +53,76 @@ describe("POST /tts/speak", () => {
   });
 });
 
+describe("POST /tts/test", () => {
+  it("browser provider is always ok (no key)", async () => {
+    const res = await request(appWith({})).post("/tts/test").send({ provider: "browser" });
+    expect(res.body).toEqual({ ok: true });
+  });
+
+  it("google ok when the voices call succeeds", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ voices: [] }) })) as any,
+    );
+    const app = appWith({ tts_provider: "google", google_tts_key: "gk" });
+    const res = await request(app).post("/tts/test").send({});
+    expect(res.body).toEqual({ ok: true });
+  });
+
+  it("openai ok when the models call succeeds", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200 })) as any);
+    const app = appWith({ tts_provider: "openai", openai_tts_key: "sk" });
+    const res = await request(app).post("/tts/test").send({});
+    expect(res.body).toEqual({ ok: true });
+  });
+
+  it("reports a missing key", async () => {
+    const app = appWith({ tts_provider: "google" });
+    const res = await request(app).post("/tts/test").send({});
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error).toMatch(/key/i);
+  });
+
+  it("reports failure on a bad key", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 403, text: async () => "no" })) as any,
+    );
+    const res = await request(appWith({ google_tts_key: "gk" }))
+      .post("/tts/test")
+      .send({ provider: "google" });
+    expect(res.body.ok).toBe(false);
+  });
+});
+
+describe("POST /tts/preview", () => {
+  it("synthesizes the sample with the given voice", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ audioContent: "QUJD" }) })) as any,
+    );
+    const res = await request(appWith({ google_tts_key: "gk" }))
+      .post("/tts/preview")
+      .send({ provider: "google", voice: "id-ID-Standard-A" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ audio: "QUJD", mime: "audio/mpeg" });
+  });
+
+  it("400s without a voice", async () => {
+    const res = await request(appWith({ google_tts_key: "gk" }))
+      .post("/tts/preview")
+      .send({ provider: "google" });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s for the browser provider", async () => {
+    const res = await request(appWith({}))
+      .post("/tts/preview")
+      .send({ provider: "browser", voice: "x" });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("GET /tts/voices", () => {
   it("returns the static OpenAI voice list", async () => {
     const app = appWith({});

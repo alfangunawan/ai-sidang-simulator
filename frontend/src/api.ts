@@ -5,7 +5,16 @@ import type {
   SessionSummary,
   TtsVoice,
   TtsAudio,
+  TestResult,
 } from "./types.js";
+
+function postJson(url: string, body: unknown): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
 
 async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => null);
@@ -87,6 +96,29 @@ export async function ttsSpeak(text: string): Promise<TtsAudio> {
 export async function getTtsVoices(provider: string): Promise<TtsVoice[]> {
   const res = await fetch(`/api/tts/voices?provider=${encodeURIComponent(provider)}`);
   return (await jsonOrThrow(res)).voices;
+}
+
+export async function testLlm(body: {
+  provider?: string;
+  model?: string;
+  api_key?: string;
+}): Promise<TestResult> {
+  return jsonOrThrow(await postJson("/api/settings/test-llm", body));
+}
+
+export async function testTts(body: {
+  provider?: string;
+  key?: string;
+}): Promise<TestResult> {
+  return jsonOrThrow(await postJson("/api/tts/test", body));
+}
+
+export async function ttsPreview(body: {
+  provider?: string;
+  voice: string;
+  key?: string;
+}): Promise<TtsAudio> {
+  return jsonOrThrow(await postJson("/api/tts/preview", body));
 }
 
 export async function getSkripsi(): Promise<SkripsiInfo | null> {
