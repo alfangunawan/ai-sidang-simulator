@@ -14,7 +14,10 @@ import {
   addTurn,
   deleteSession,
   deleteTurn,
+  countExaminerTurns,
+  getSessionMeta,
 } from "../repos/sessions.js";
+import { stripCloseMarker, shouldProposeClose } from "../sidang.js";
 
 export function sessionsRouter(
   db: Database.Database,
@@ -44,6 +47,10 @@ export function sessionsRouter(
 
     if (!sessionExists(db, sessionId)) {
       return res.status(404).json({ error: "Sesi tidak ditemukan" });
+    }
+    const meta = getSessionMeta(db, sessionId);
+    if (meta?.status === "closed") {
+      return res.status(409).json({ error: "Sidang sudah ditutup" });
     }
     if (!transcript) {
       return res.status(400).json({ error: "Transkrip kosong" });
@@ -76,15 +83,17 @@ export function sessionsRouter(
         console.log("[turn usage]", result.usage);
       }
 
-      addTurn(
-        db,
-        sessionId,
-        nextTurnNumber(db, sessionId),
-        "examiner",
-        result.reply,
-        now(),
-      );
-      res.json({ reply: result.reply });
+      const { reply, hasMarker } = stripCloseMarker(result.reply);
+
+      addTurn(db, sessionId, nextTurnNumber(db, sessionId), "examiner", reply, now());
+
+      const examinerCount = countExaminerTurns(db, sessionId);
+      const propose_close = shouldProposeClose({
+        hasMarker,
+        examinerCount,
+        declinedTurn: meta?.close_declined_turn ?? null,
+      });
+      res.json({ reply, propose_close });
     } catch (err) {
       // Never leak provider internals / keys.
       console.error("[turn error]", (err as Error).message);
