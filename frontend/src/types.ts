@@ -30,3 +30,9 @@ export interface SkripsiInfo {
   char_count: number;
   uploaded_at: string;
 }
+export interface SessionSummary {
+  id: string;
+  created_at: string;
+  label: string | null;
+  turn_count: number;
+}

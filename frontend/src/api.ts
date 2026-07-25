@@ -2,6 +2,7 @@ import type {
   Turn,
   SettingsView,
   SkripsiInfo,
+  SessionSummary,
   TtsVoice,
   TtsAudio,
 } from "./types.js";
@@ -32,6 +33,10 @@ export async function createSession(): Promise<string> {
 export async function getTurns(id: string): Promise<Turn[]> {
   const res = await fetch(`/api/sessions/${id}/turns`);
   return (await jsonOrThrow(res)).turns;
+}
+
+export async function listSessions(): Promise<SessionSummary[]> {
+  return (await jsonOrThrow(await fetch("/api/sessions"))).sessions;
 }
 
 export async function postTurn(id: string, transcript: string): Promise<string> {

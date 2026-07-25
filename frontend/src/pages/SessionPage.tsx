@@ -3,7 +3,6 @@ import {
   createSession,
   getTurns,
   postTurn,
-  deleteSession,
   getSettings,
   saveSettings,
 } from "../api.js";
@@ -12,7 +11,9 @@ import { useSpeechRecognition } from "../hooks/useSpeechRecognition.js";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis.js";
 import { useAudioLevel } from "../hooks/useAudioLevel.js";
 import { VoiceVisualizer, type VizState } from "../components/VoiceVisualizer.js";
-import { ConfirmModal } from "../components/ConfirmModal.js";
+import { Transcript } from "../components/Transcript.js";
+import { stripMarkdown } from "../lib/markdown.js";
+import { turnsToCsv, downloadCsv } from "../lib/csv.js";
 
 const KEY = "sibiru_session_id";
 
@@ -22,7 +23,6 @@ export function SessionPage() {
   const [manual, setManual] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
   const [modes, setModes] = useState<ExaminerMode[]>([]);
   const [mode, setMode] = useState<string>("standar");
   const [ttsProvider, setTtsProvider] = useState<string>("browser");
@@ -97,7 +97,7 @@ export function SessionPage() {
     try {
       const reply = await postTurn(sessionId, transcript);
       setTurns((t) => [...t, { role: "examiner", content: reply }]);
-      tts.speak(reply);
+      tts.speak(stripMarkdown(reply));
     } catch (e) {
       setErr((e as Error).message);
       setTurns((t) => t.slice(0, -1)); // roll back the optimistic user bubble
@@ -108,15 +108,24 @@ export function SessionPage() {
     }
   }
 
-  async function reset() {
-    setConfirming(false);
-    if (sessionId) await deleteSession(sessionId).catch(() => {});
-    localStorage.removeItem(KEY);
-    const fresh = await createSession();
-    localStorage.setItem(KEY, fresh);
-    setSessionId(fresh);
-    setTurns([]);
-    tts.cancel();
+  // Start a fresh session. The old one is kept (it lives in Riwayat) — this does
+  // not delete anything.
+  async function newSession() {
+    try {
+      const fresh = await createSession();
+      localStorage.setItem(KEY, fresh);
+      setSessionId(fresh);
+      setTurns([]);
+      tts.cancel();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  function exportCurrent() {
+    if (turns.length === 0) return;
+    const slug = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    downloadCsv(`sibiru-sesi-${slug}.csv`, turnsToCsv(turns));
   }
 
   return (
@@ -142,14 +151,23 @@ export function SessionPage() {
       <section className="transcript">
         <header className="transcript-head">
           <span className="transcript-title">Transkrip Sidang</span>
-          <span className={`live ${vizState}`}>
-            <i className="dot" />
-            {vizState === "speaking"
-              ? "Penguji bicara"
-              : vizState === "listening"
-                ? "Merekam"
-                : "Siap"}
-          </span>
+          <div className="head-actions">
+            <button
+              className="ghost sm"
+              onClick={exportCurrent}
+              disabled={turns.length === 0}
+            >
+              Export
+            </button>
+            <span className={`live ${vizState}`}>
+              <i className="dot" />
+              {vizState === "speaking"
+                ? "Penguji bicara"
+                : vizState === "listening"
+                  ? "Merekam"
+                  : "Siap"}
+            </span>
+          </div>
         </header>
 
         <div className="transcript-body" ref={scrollRef}>
@@ -161,12 +179,7 @@ export function SessionPage() {
               </p>
             </div>
           ) : (
-            turns.map((t, i) => (
-              <div key={i} className={`bubble ${t.role}`}>
-                <span className="who">{t.role === "examiner" ? "Penguji" : "Anda"}</span>
-                <span className="msg">{t.content}</span>
-              </div>
-            ))
+            <Transcript turns={turns} />
           )}
           {busy && (
             <div className="bubble examiner">
@@ -195,8 +208,8 @@ export function SessionPage() {
               <button className="primary" onClick={send} disabled={busy || !pending.trim()}>
                 {busy ? "Mengirim…" : "Kirim"}
               </button>
-              <button className="ghost" onClick={() => setConfirming(true)}>
-                Reset
+              <button className="ghost" onClick={newSession}>
+                Sesi Baru
               </button>
             </div>
           </>
@@ -215,8 +228,8 @@ export function SessionPage() {
               <button className="primary" onClick={send} disabled={busy || !pending.trim()}>
                 {busy ? "Mengirim…" : "Kirim"}
               </button>
-              <button className="ghost" onClick={() => setConfirming(true)}>
-                Reset
+              <button className="ghost" onClick={newSession}>
+                Sesi Baru
               </button>
             </div>
           </>
@@ -224,14 +237,6 @@ export function SessionPage() {
       </div>
 
       {err && <p className="error">{err}</p>}
-
-      <ConfirmModal
-        open={confirming}
-        title="Reset sesi?"
-        message="Seluruh riwayat sesi ini akan dihapus permanen."
-        onConfirm={reset}
-        onCancel={() => setConfirming(false)}
-      />
     </div>
   );
 }

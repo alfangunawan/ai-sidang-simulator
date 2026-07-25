@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { SessionPage } from "./pages/SessionPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
+import { HistoryPage } from "./pages/HistoryPage.js";
 
 export default function App() {
-  const [view, setView] = useState<"session" | "settings">("session");
+  const [view, setView] = useState<"session" | "history" | "settings">("session");
   return (
     <div className="app">
       <header className="masthead">
@@ -18,13 +19,21 @@ export default function App() {
           Latihan
         </button>
         <button
+          className={view === "history" ? "primary" : ""}
+          onClick={() => setView("history")}
+        >
+          Riwayat
+        </button>
+        <button
           className={view === "settings" ? "primary" : ""}
           onClick={() => setView("settings")}
         >
           Pengaturan
         </button>
       </nav>
-      {view === "session" ? <SessionPage /> : <SettingsPage />}
+      {view === "session" && <SessionPage />}
+      {view === "history" && <HistoryPage />}
+      {view === "settings" && <SettingsPage />}
     </div>
   );
 }

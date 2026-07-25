@@ -100,6 +100,28 @@ describe("sessions routes", () => {
     expect(turns.body.turns).toEqual([]);
   });
 
+  it("GET /sessions lists sessions that have turns", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: "q" } }] }),
+      })) as any,
+    );
+    const app = ready();
+    const created = await request(app).post("/sessions").send({});
+    await request(app)
+      .post(`/sessions/${created.body.session_id}/turn`)
+      .send({ transcript: "halo" });
+
+    const res = await request(app).get("/sessions");
+    expect(res.status).toBe(200);
+    expect(res.body.sessions).toHaveLength(1);
+    expect(res.body.sessions[0].id).toBe(created.body.session_id);
+    expect(res.body.sessions[0].turn_count).toBe(2);
+  });
+
   it("404s a turn for an unknown session", async () => {
     const app = ready();
     const res = await request(app)

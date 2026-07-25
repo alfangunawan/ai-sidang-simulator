@@ -14,6 +14,27 @@ export function createSession(
   );
 }
 
+export interface SessionSummary {
+  id: string;
+  created_at: string;
+  label: string | null;
+  turn_count: number;
+}
+
+// Sessions that have at least one turn, newest first, with their turn count.
+// The inner JOIN excludes empty (auto-created) sessions.
+export function listSessions(db: Database.Database): SessionSummary[] {
+  return db
+    .prepare(
+      `SELECT s.id, s.created_at, s.label, COUNT(t.id) AS turn_count
+       FROM sessions s
+       JOIN turns t ON t.session_id = s.id
+       GROUP BY s.id, s.created_at, s.label
+       ORDER BY s.created_at DESC`,
+    )
+    .all() as SessionSummary[];
+}
+
 export function sessionExists(db: Database.Database, sessionId: string): boolean {
   return (
     db.prepare("SELECT 1 FROM sessions WHERE id = ?").get(sessionId) !== undefined

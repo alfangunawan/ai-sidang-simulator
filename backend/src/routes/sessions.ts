@@ -7,6 +7,7 @@ import { getActiveDocument } from "../repos/documents.js";
 import { buildPersona } from "../persona.js";
 import {
   createSession,
+  listSessions,
   sessionExists,
   getTurns,
   nextTurnNumber,
@@ -27,6 +28,10 @@ export function sessionsRouter(
     const id = uuid();
     createSession(db, id, now(), (req.body?.label as string) ?? null);
     res.json({ session_id: id });
+  });
+
+  r.get("/", (_req, res) => {
+    res.json({ sessions: listSessions(db) });
   });
 
   r.get("/:id/turns", (req, res) => {

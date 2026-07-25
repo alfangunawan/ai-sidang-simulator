@@ -54,6 +54,17 @@ describe("SessionPage", () => {
     expect(api.postTurn).toHaveBeenCalledWith("sess-1", "Jawaban saya.");
   });
 
+  it("Sesi Baru starts a fresh session without deleting the old one", async () => {
+    const del = vi.spyOn(api, "deleteSession");
+    render(<SessionPage />);
+    await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("Sesi Baru"));
+
+    await waitFor(() => expect(api.createSession).toHaveBeenCalledTimes(2));
+    expect(del).not.toHaveBeenCalled();
+  });
+
   it("renders the examiner-mode selector and persists a change", async () => {
     render(<SessionPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
