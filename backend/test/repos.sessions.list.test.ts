@@ -24,8 +24,22 @@ describe("listSessions", () => {
     const sessions = listSessions(d);
 
     expect(sessions).toEqual([
-      { id: "new", created_at: "2026-07-25T14:30:00Z", label: null, turn_count: 2 },
-      { id: "old", created_at: "2026-07-24T09:00:00Z", label: null, turn_count: 1 },
+      {
+        id: "new",
+        created_at: "2026-07-25T14:30:00Z",
+        label: null,
+        turn_count: 2,
+        status: "active",
+        final_score: null,
+      },
+      {
+        id: "old",
+        created_at: "2026-07-24T09:00:00Z",
+        label: null,
+        turn_count: 1,
+        status: "active",
+        final_score: null,
+      },
     ]);
   });
 
