@@ -152,9 +152,9 @@ export function sessionsRouter(
 
       let assessment: Assessment;
       try {
-        assessment = parseAssessment((await provider.generate(system, user, 1024)).text);
+        assessment = parseAssessment((await provider.generate(system, user, 1536)).text);
       } catch {
-        assessment = parseAssessment((await provider.generate(system, user, 1024)).text);
+        assessment = parseAssessment((await provider.generate(system, user, 1536)).text);
       }
 
       closeWithAssessment(db, sessionId, now(), JSON.stringify(assessment));

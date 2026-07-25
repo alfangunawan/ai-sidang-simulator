@@ -11,7 +11,7 @@ beforeEach(() => {
       created_at: "2026-07-25T14:30:00Z",
       label: null,
       turn_count: 4,
-      status: "open",
+      status: "active",
       final_score: null,
     },
   ]);

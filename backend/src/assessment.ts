@@ -71,6 +71,7 @@ Keluarkan HANYA JSON valid (tanpa teks lain, tanpa code fence) dengan bentuk per
 }`;
 }
 
+// Transcript is untrusted user input embedded directly into the prompt; scores are clamped and grade/verdict are re-derived in parseAssessment, so injection can only influence free-text fields (ringkasan/kelebihan/kekurangan/saran).
 export function buildAssessmentUser(skripsi: string, transcript: string): string {
   return `ISI SKRIPSI:\n${skripsi}\n\nTRANSKRIP SIDANG:\n${transcript}`;
 }
