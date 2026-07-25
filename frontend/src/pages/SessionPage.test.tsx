@@ -33,7 +33,10 @@ beforeEach(() => {
   };
   vi.spyOn(api, "createSession").mockResolvedValue("sess-1");
   vi.spyOn(api, "getTurns").mockResolvedValue([]);
-  vi.spyOn(api, "postTurn").mockResolvedValue("Apa kontribusi utama skripsi Anda?");
+  vi.spyOn(api, "postTurn").mockResolvedValue({
+    reply: "Apa kontribusi utama skripsi Anda?",
+    propose_close: false,
+  });
   vi.spyOn(api, "getSettings").mockResolvedValue(settingsView);
   vi.spyOn(api, "saveSettings").mockResolvedValue(settingsView);
 });
@@ -41,7 +44,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("SessionPage", () => {
   it("sends a manual answer and renders the examiner reply", async () => {
-    render(<SessionPage />);
+    render(<SessionPage onClosed={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     const textarea = screen.getByPlaceholderText(/Ketik jawaban/);
@@ -56,7 +59,7 @@ describe("SessionPage", () => {
 
   it("Sesi Baru starts a fresh session without deleting the old one", async () => {
     const del = vi.spyOn(api, "deleteSession");
-    render(<SessionPage />);
+    render(<SessionPage onClosed={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     fireEvent.click(screen.getByText("Sesi Baru"));
@@ -66,7 +69,7 @@ describe("SessionPage", () => {
   });
 
   it("renders the examiner-mode selector and persists a change", async () => {
-    render(<SessionPage />);
+    render(<SessionPage onClosed={vi.fn()} />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
     const select = (await screen.findByText("Galak")).closest(
@@ -78,5 +81,51 @@ describe("SessionPage", () => {
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenCalledWith({ examiner_mode: "galak" }),
     );
+  });
+
+  it("opens the close modal when the examiner proposes closing", async () => {
+    vi.spyOn(api, "postTurn").mockResolvedValue({ reply: "Baik.", propose_close: true });
+    render(<SessionPage onClosed={vi.fn()} />);
+    await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), {
+      target: { value: "jawaban" },
+    });
+    fireEvent.click(screen.getByText("Kirim"));
+
+    await waitFor(() => expect(screen.getByText("Lanjut bertanya")).toBeTruthy());
+  });
+
+  it("declining an AI proposal calls continueSession and keeps the session", async () => {
+    vi.spyOn(api, "postTurn").mockResolvedValue({ reply: "Baik.", propose_close: true });
+    const cont = vi.spyOn(api, "continueSession").mockResolvedValue();
+    render(<SessionPage onClosed={vi.fn()} />);
+    await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
+    fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), { target: { value: "x" } });
+    fireEvent.click(screen.getByText("Kirim"));
+    await waitFor(() => expect(screen.getByText("Lanjut bertanya")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("Lanjut bertanya"));
+    await waitFor(() => expect(cont).toHaveBeenCalledWith("sess-1"));
+  });
+
+  it("Akhiri Sidang → confirm closes and calls onClosed with the assessment", async () => {
+    const assessment = { final_score: 80 } as any;
+    vi.spyOn(api, "closeSession").mockResolvedValue(assessment);
+    const onClosed = vi.fn();
+    render(<SessionPage onClosed={onClosed} />);
+    await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
+
+    // "Akhiri Sidang" is disabled until there's at least one turn — same guard as "Export".
+    fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), {
+      target: { value: "jawaban" },
+    });
+    fireEvent.click(screen.getByText("Kirim"));
+    await waitFor(() => expect(screen.getByText(/Apa kontribusi utama/)).toBeTruthy());
+
+    fireEvent.click(screen.getByText("Akhiri Sidang"));
+    fireEvent.click(screen.getByText("Akhiri & lihat hasil"));
+
+    await waitFor(() => expect(onClosed).toHaveBeenCalledWith(assessment));
   });
 });

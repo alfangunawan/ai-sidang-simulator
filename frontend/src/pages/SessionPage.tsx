@@ -5,19 +5,22 @@ import {
   postTurn,
   getSettings,
   saveSettings,
+  closeSession,
+  continueSession,
 } from "../api.js";
-import type { Turn, ExaminerMode } from "../types.js";
+import type { Turn, ExaminerMode, Assessment } from "../types.js";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition.js";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis.js";
 import { useAudioLevel } from "../hooks/useAudioLevel.js";
 import { VoiceVisualizer, type VizState } from "../components/VoiceVisualizer.js";
 import { Transcript } from "../components/Transcript.js";
+import { ConfirmModal } from "../components/ConfirmModal.js";
 import { stripMarkdown } from "../lib/markdown.js";
 import { turnsToCsv, downloadCsv } from "../lib/csv.js";
 
-const KEY = "sibiru_session_id";
+export const SESSION_KEY = "sibiru_session_id";
 
-export function SessionPage() {
+export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [manual, setManual] = useState("");
@@ -26,6 +29,9 @@ export function SessionPage() {
   const [modes, setModes] = useState<ExaminerMode[]>([]);
   const [mode, setMode] = useState<string>("standar");
   const [ttsProvider, setTtsProvider] = useState<string>("browser");
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeSource, setCloseSource] = useState<"ai" | "manual">("manual");
+  const [closing, setClosing] = useState(false);
   const stt = useSpeechRecognition();
   const tts = useSpeechSynthesis(ttsProvider);
   const mic = useAudioLevel(stt.listening);
@@ -33,14 +39,14 @@ export function SessionPage() {
 
   useEffect(() => {
     (async () => {
-      let id = localStorage.getItem(KEY);
+      let id = localStorage.getItem(SESSION_KEY);
       if (!id) {
         try {
           id = await createSession();
         } catch {
           return; // backend down on first load; leave as-is
         }
-        localStorage.setItem(KEY, id);
+        localStorage.setItem(SESSION_KEY, id);
       }
       setSessionId(id);
       try {
@@ -48,7 +54,7 @@ export function SessionPage() {
       } catch {
         // stale id (backend db reset): make a fresh one
         const fresh = await createSession();
-        localStorage.setItem(KEY, fresh);
+        localStorage.setItem(SESSION_KEY, fresh);
         setSessionId(fresh);
         setTurns([]);
       }
@@ -95,9 +101,13 @@ export function SessionPage() {
     const transcript = pending.trim();
     setTurns((t) => [...t, { role: "user", content: transcript }]);
     try {
-      const reply = await postTurn(sessionId, transcript);
+      const { reply, propose_close } = await postTurn(sessionId, transcript);
       setTurns((t) => [...t, { role: "examiner", content: reply }]);
       tts.speak(stripMarkdown(reply));
+      if (propose_close) {
+        setCloseSource("ai");
+        setCloseOpen(true);
+      }
     } catch (e) {
       setErr((e as Error).message);
       setTurns((t) => t.slice(0, -1)); // roll back the optimistic user bubble
@@ -113,12 +123,45 @@ export function SessionPage() {
   async function newSession() {
     try {
       const fresh = await createSession();
-      localStorage.setItem(KEY, fresh);
+      localStorage.setItem(SESSION_KEY, fresh);
       setSessionId(fresh);
       setTurns([]);
       tts.cancel();
     } catch (e) {
       setErr((e as Error).message);
+    }
+  }
+
+  function askClose() {
+    setCloseSource("manual");
+    setCloseOpen(true);
+  }
+
+  async function confirmClose() {
+    if (!sessionId || closing) return;
+    setClosing(true);
+    setErr(null);
+    try {
+      const assessment = await closeSession(sessionId);
+      localStorage.removeItem(SESSION_KEY);
+      tts.cancel();
+      setCloseOpen(false);
+      onClosed(assessment);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function cancelClose() {
+    setCloseOpen(false);
+    if (closeSource === "ai" && sessionId) {
+      try {
+        await continueSession(sessionId);
+      } catch (e) {
+        setErr((e as Error).message);
+      }
     }
   }
 
@@ -213,6 +256,9 @@ export function SessionPage() {
               <button className="ghost" onClick={newSession}>
                 Sesi Baru
               </button>
+              <button className="ghost" onClick={askClose} disabled={turns.length === 0}>
+                Akhiri Sidang
+              </button>
             </div>
           </>
         ) : (
@@ -233,6 +279,9 @@ export function SessionPage() {
               <button className="ghost" onClick={newSession}>
                 Sesi Baru
               </button>
+              <button className="ghost" onClick={askClose} disabled={turns.length === 0}>
+                Akhiri Sidang
+              </button>
             </div>
           </>
         )}
@@ -240,6 +289,20 @@ export function SessionPage() {
 
       {err && <p className="error">{err}</p>}
       {tts.error && <p className="hint">🔇 {tts.error}</p>}
+
+      <ConfirmModal
+        open={closeOpen}
+        title="Akhiri sidang?"
+        message={
+          closeSource === "ai"
+            ? "Penguji merasa sidang sudah cukup. Akhiri sidang & lihat hasil penilaian?"
+            : "Akhiri sidang sekarang & lihat hasil penilaian?"
+        }
+        confirmLabel={closing ? "Menilai…" : "Akhiri & lihat hasil"}
+        cancelLabel={closeSource === "ai" ? "Lanjut bertanya" : "Batal"}
+        onConfirm={confirmClose}
+        onCancel={cancelClose}
+      />
     </div>
   );
 }
