@@ -6,20 +6,27 @@ import * as csv from "../lib/csv.js";
 
 beforeEach(() => {
   vi.spyOn(api, "listSessions").mockResolvedValue([
-    { id: "s1", created_at: "2026-07-25T14:30:00Z", label: null, turn_count: 4 },
+    {
+      id: "s1",
+      created_at: "2026-07-25T14:30:00Z",
+      label: null,
+      turn_count: 4,
+      status: "open",
+      final_score: null,
+    },
   ]);
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe("HistoryPage", () => {
   it("lists past sessions with their turn count", async () => {
-    render(<HistoryPage />);
+    render(<HistoryPage onOpenResult={vi.fn()} />);
     expect(await screen.findByText(/4 percakapan/)).toBeTruthy();
   });
 
   it("deletes a session after confirming", async () => {
     const del = vi.spyOn(api, "deleteSession").mockResolvedValue();
-    render(<HistoryPage />);
+    render(<HistoryPage onOpenResult={vi.fn()} />);
     await screen.findByText(/4 percakapan/);
 
     fireEvent.click(screen.getByText("Hapus"));
@@ -38,7 +45,7 @@ describe("HistoryPage", () => {
     ]);
     const download = vi.spyOn(csv, "downloadCsv").mockImplementation(() => {});
 
-    render(<HistoryPage />);
+    render(<HistoryPage onOpenResult={vi.fn()} />);
     await screen.findByText(/4 percakapan/);
     fireEvent.click(screen.getByText("Buka"));
 
@@ -49,5 +56,24 @@ describe("HistoryPage", () => {
     const [, csvText] = download.mock.calls[0];
     expect(csvText).toContain("no,peran,isi");
     expect(csvText).toContain("Penguji,pertanyaan?");
+  });
+
+  it("shows Lihat Hasil for closed sessions and calls onOpenResult", async () => {
+    vi.spyOn(api, "listSessions").mockResolvedValue([
+      {
+        id: "s1",
+        created_at: "2026-01-01T00:00:00Z",
+        label: null,
+        turn_count: 12,
+        status: "closed",
+        final_score: 82,
+      },
+    ]);
+    const onOpenResult = vi.fn();
+    render(<HistoryPage onOpenResult={onOpenResult} />);
+    await waitFor(() => expect(screen.getByText("Lihat Hasil")).toBeTruthy());
+    expect(screen.getByText(/Skor 82/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Lihat Hasil"));
+    expect(onOpenResult).toHaveBeenCalledWith("s1");
   });
 });

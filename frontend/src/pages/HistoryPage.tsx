@@ -22,7 +22,7 @@ function exportSession(s: SessionSummary, turns: Turn[]): void {
   downloadCsv(`sibiru-sesi-${slug}.csv`, turnsToCsv(turns));
 }
 
-export function HistoryPage() {
+export function HistoryPage({ onOpenResult }: { onOpenResult: (id: string) => void }) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selected, setSelected] = useState<SessionSummary | null>(null);
   const [detailTurns, setDetailTurns] = useState<Turn[]>([]);
@@ -112,9 +112,15 @@ export function HistoryPage() {
                 <span className="history-count">{s.turn_count} percakapan</span>
               </div>
               <div className="history-actions">
+                {s.status === "closed" && s.final_score != null && (
+                  <span className="history-score">Skor {s.final_score}</span>
+                )}
                 <button className="primary" onClick={() => open(s)}>
                   Buka
                 </button>
+                {s.status === "closed" && (
+                  <button onClick={() => onOpenResult(s.id)}>Lihat Hasil</button>
+                )}
                 <button className="ghost" onClick={() => setConfirmId(s.id)}>
                   Hapus
                 </button>
