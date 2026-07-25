@@ -42,3 +42,26 @@ describe("persona", () => {
     );
   });
 });
+
+import { SIDANG_PHASES, buildAgendaRules } from "../src/persona.js";
+import { CLOSE_MARKER } from "../src/sidang.js";
+
+describe("persona agenda", () => {
+  it("lists all sidang phases in order", () => {
+    expect(SIDANG_PHASES[0]).toBe("Pembukaan");
+    expect(SIDANG_PHASES[SIDANG_PHASES.length - 1]).toBe("Penutup");
+    expect(SIDANG_PHASES).toContain("Metodologi");
+  });
+
+  it("agenda rules instruct to use the marker only when done", () => {
+    const rules = buildAgendaRules();
+    expect(rules).toContain(CLOSE_MARKER);
+    expect(rules).toMatch(/JANGAN menyatakan sidang selesai/);
+  });
+
+  it("buildPersona embeds the agenda and the marker rule", () => {
+    const p = buildPersona("standar", "");
+    expect(p).toContain("AGENDA SIDANG");
+    expect(p).toContain(CLOSE_MARKER);
+  });
+});
