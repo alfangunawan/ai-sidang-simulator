@@ -16,7 +16,16 @@ import {
   deleteTurn,
   countExaminerTurns,
   getSessionMeta,
+  setCloseDeclined,
+  closeWithAssessment,
 } from "../repos/sessions.js";
+import {
+  buildAssessmentSystem,
+  buildAssessmentUser,
+  formatTranscript,
+  parseAssessment,
+  type Assessment,
+} from "../assessment.js";
 import { stripCloseMarker, shouldProposeClose } from "../sidang.js";
 
 export function sessionsRouter(
@@ -107,6 +116,65 @@ export function sessionsRouter(
   r.delete("/:id", (req, res) => {
     deleteSession(db, req.params.id);
     res.json({ ok: true });
+  });
+
+  r.post("/:id/continue", (req, res) => {
+    const sessionId = req.params.id;
+    if (!sessionExists(db, sessionId)) {
+      return res.status(404).json({ error: "Sesi tidak ditemukan" });
+    }
+    setCloseDeclined(db, sessionId, countExaminerTurns(db, sessionId));
+    res.json({ ok: true });
+  });
+
+  r.post("/:id/close", async (req, res) => {
+    const sessionId = req.params.id;
+    if (!sessionExists(db, sessionId)) {
+      return res.status(404).json({ error: "Sesi tidak ditemukan" });
+    }
+    const meta = getSessionMeta(db, sessionId);
+    if (meta?.status === "closed" && meta.assessment) {
+      return res.json({ assessment: JSON.parse(meta.assessment) as Assessment });
+    }
+    if (getSetting(db, "api_key") === null) {
+      return res.status(400).json({ error: "Set API key di Settings dulu" });
+    }
+    const doc = getActiveDocument(db);
+    if (!doc) {
+      return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
+    }
+
+    try {
+      const cfg = getActiveConfig(db, key);
+      const provider = getProvider(cfg);
+      const system = buildAssessmentSystem();
+      const user = buildAssessmentUser(doc.full_text, formatTranscript(getTurns(db, sessionId)));
+
+      let assessment: Assessment;
+      try {
+        assessment = parseAssessment((await provider.generate(system, user, 1024)).text);
+      } catch {
+        assessment = parseAssessment((await provider.generate(system, user, 1024)).text);
+      }
+
+      closeWithAssessment(db, sessionId, now(), JSON.stringify(assessment));
+      res.json({ assessment });
+    } catch (err) {
+      console.error("[close error]", (err as Error).message);
+      res.status(500).json({ error: "Gagal menilai sidang, coba lagi" });
+    }
+  });
+
+  r.get("/:id/result", (req, res) => {
+    const sessionId = req.params.id;
+    if (!sessionExists(db, sessionId)) {
+      return res.status(404).json({ error: "Sesi tidak ditemukan" });
+    }
+    const meta = getSessionMeta(db, sessionId);
+    res.json({
+      status: meta?.status ?? "active",
+      assessment: meta?.assessment ? (JSON.parse(meta.assessment) as Assessment) : null,
+    });
   });
 
   return r;
