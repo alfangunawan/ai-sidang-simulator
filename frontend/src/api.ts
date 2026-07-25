@@ -1,8 +1,16 @@
 import type { Turn, SettingsView, SkripsiInfo } from "./types.js";
 
 async function jsonOrThrow(res: Response) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as any)?.error ?? `HTTP ${res.status}`);
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const serverError = (data as any)?.error;
+    if (typeof serverError === "string") throw new Error(serverError);
+    // No JSON `{error}` body → not the backend's own error (e.g. the Vite dev
+    // proxy returning 500 because the backend isn't running).
+    throw new Error(
+      `Tidak bisa terhubung ke server (HTTP ${res.status}). Pastikan backend berjalan: jalankan "cd backend && npm run dev".`,
+    );
+  }
   return data;
 }
 

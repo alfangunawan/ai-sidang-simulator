@@ -24,6 +24,20 @@ describe("api client", () => {
     await expect(postTurn("s1", "x")).rejects.toThrow("Upload skripsi (PDF) dulu");
   });
 
+  it("throws a 'backend not running' message on a non-2xx with no JSON body (proxy 500)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error("Unexpected end of JSON input"); // empty/non-JSON body
+        },
+      })) as any,
+    );
+    await expect(postTurn("s1", "x")).rejects.toThrow(/backend berjalan/);
+  });
+
   it("uploadSkripsi posts multipart FormData", async () => {
     const captured: { body?: any } = {};
     vi.stubGlobal(
