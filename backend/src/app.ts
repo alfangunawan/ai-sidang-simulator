@@ -5,6 +5,7 @@ import { seedDefaults } from "./repos/settings.js";
 import { settingsRouter } from "./routes/settings.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { skripsiRouter } from "./routes/skripsi.js";
+import { ttsRouter } from "./routes/tts.js";
 
 export function buildApp(db: Database.Database, key: Buffer): express.Express {
   seedDefaults(db);
@@ -20,6 +21,7 @@ export function buildApp(db: Database.Database, key: Buffer): express.Express {
   app.use("/settings", settingsRouter(db, key));
   app.use("/sessions", sessionsRouter(db, key));
   app.use("/skripsi", skripsiRouter(db));
+  app.use("/tts", ttsRouter(db, key));
 
   app.use(
     (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

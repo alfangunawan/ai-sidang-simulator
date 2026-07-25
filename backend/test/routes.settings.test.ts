@@ -43,4 +43,28 @@ describe("settings routes", () => {
     expect(res.body.has_api_key).toBe(true);
     expect(res.body.model).toBe("claude-opus-4-8");
   });
+
+  it("GET returns TTS defaults (browser, no keys)", async () => {
+    const { app: a } = app();
+    const res = await request(a).get("/settings");
+    expect(res.body.tts_provider).toBe("browser");
+    expect(res.body.tts_voice).toBe("");
+    expect(res.body.has_google_tts_key).toBe(false);
+    expect(res.body.has_openai_tts_key).toBe(false);
+  });
+
+  it("POST stores a TTS provider, voice, and an encrypted Google key without leaking it", async () => {
+    const { app: a, db } = app();
+    const res = await request(a).post("/settings").send({
+      tts_provider: "google",
+      tts_voice: "id-ID-Chirp3-HD-Kore",
+      google_tts_key: "gcp-SECRET",
+    });
+    expect(res.body.tts_provider).toBe("google");
+    expect(res.body.tts_voice).toBe("id-ID-Chirp3-HD-Kore");
+    expect(res.body.has_google_tts_key).toBe(true);
+    expect(res.body.has_openai_tts_key).toBe(false);
+    expect(JSON.stringify(res.body)).not.toContain("gcp-SECRET");
+    expect(getSetting(db, "google_tts_key")).not.toContain("gcp-SECRET");
+  });
 });

@@ -25,8 +25,9 @@ export function SessionPage() {
   const [confirming, setConfirming] = useState(false);
   const [modes, setModes] = useState<ExaminerMode[]>([]);
   const [mode, setMode] = useState<string>("standar");
+  const [ttsProvider, setTtsProvider] = useState<string>("browser");
   const stt = useSpeechRecognition();
-  const tts = useSpeechSynthesis();
+  const tts = useSpeechSynthesis(ttsProvider);
   const mic = useAudioLevel(stt.listening);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -60,6 +61,7 @@ export function SessionPage() {
       .then((s) => {
         setModes(s.examiner_modes);
         setMode(s.examiner_mode);
+        setTtsProvider(s.tts_provider);
       })
       .catch(() => {});
   }, []);

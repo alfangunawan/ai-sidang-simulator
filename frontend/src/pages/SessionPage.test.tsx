@@ -26,6 +26,10 @@ beforeEach(() => {
       { value: "kritis", label: "Kritis" },
       { value: "galak", label: "Galak" },
     ],
+    tts_provider: "browser",
+    tts_voice: "",
+    has_google_tts_key: false,
+    has_openai_tts_key: false,
   };
   vi.spyOn(api, "createSession").mockResolvedValue("sess-1");
   vi.spyOn(api, "getTurns").mockResolvedValue([]);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { postTurn, uploadSkripsi } from "./api.js";
+import { postTurn, uploadSkripsi, ttsSpeak, getTtsVoices } from "./api.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -36,6 +36,32 @@ describe("api client", () => {
       })) as any,
     );
     await expect(postTurn("s1", "x")).rejects.toThrow(/backend berjalan/);
+  });
+
+  it("ttsSpeak posts the text and returns the audio payload", async () => {
+    const captured: { body?: any } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: any) => {
+        captured.body = JSON.parse(init.body);
+        return { ok: true, json: async () => ({ audio: "QQ==", mime: "audio/mpeg" }) };
+      }) as any,
+    );
+    expect(await ttsSpeak("halo")).toEqual({ audio: "QQ==", mime: "audio/mpeg" });
+    expect(captured.body).toEqual({ text: "halo" });
+  });
+
+  it("getTtsVoices requests the given provider and returns its voices", async () => {
+    const captured: { url?: string } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        captured.url = url;
+        return { ok: true, json: async () => ({ voices: [{ name: "nova", type: "OpenAI" }] }) };
+      }) as any,
+    );
+    expect(await getTtsVoices("openai")).toEqual([{ name: "nova", type: "OpenAI" }]);
+    expect(captured.url).toContain("provider=openai");
   });
 
   it("uploadSkripsi posts multipart FormData", async () => {

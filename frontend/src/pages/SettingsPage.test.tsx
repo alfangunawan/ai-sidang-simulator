@@ -3,20 +3,28 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { SettingsPage } from "./SettingsPage.js";
 import * as api from "../api.js";
 
+import type { SettingsView } from "../types.js";
+
+const VIEW: SettingsView = {
+  provider: "claude",
+  model: "claude-sonnet-5",
+  has_api_key: false,
+  attack_points: "POIN A",
+  examiner_mode: "standar",
+  examiner_modes: [
+    { value: "santai", label: "Santai" },
+    { value: "standar", label: "Standar" },
+    { value: "kritis", label: "Kritis" },
+    { value: "galak", label: "Galak" },
+  ],
+  tts_provider: "browser",
+  tts_voice: "",
+  has_google_tts_key: false,
+  has_openai_tts_key: false,
+};
+
 beforeEach(() => {
-  vi.spyOn(api, "getSettings").mockResolvedValue({
-    provider: "claude",
-    model: "claude-sonnet-5",
-    has_api_key: false,
-    attack_points: "POIN A",
-    examiner_mode: "standar",
-    examiner_modes: [
-      { value: "santai", label: "Santai" },
-      { value: "standar", label: "Standar" },
-      { value: "kritis", label: "Kritis" },
-      { value: "galak", label: "Galak" },
-    ],
-  });
+  vi.spyOn(api, "getSettings").mockResolvedValue(VIEW);
   vi.spyOn(api, "getSkripsi").mockResolvedValue(null);
 });
 afterEach(() => vi.restoreAllMocks());
@@ -26,6 +34,43 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(screen.getByText(/Key tersimpan: tidak/)).toBeTruthy());
     expect(screen.getByText(/Belum ada skripsi/)).toBeTruthy();
+  });
+
+  it("reveals Google key + voice fields when TTS provider is Google and saves them", async () => {
+    vi.spyOn(api, "getTtsVoices").mockResolvedValue([
+      { name: "id-ID-Chirp3-HD-Kore", type: "Chirp3-HD", gender: "FEMALE" },
+    ]);
+    const save = vi.spyOn(api, "saveSettings").mockResolvedValue({
+      ...VIEW,
+      tts_provider: "google",
+      tts_voice: "id-ID-Chirp3-HD-Kore",
+      has_google_tts_key: true,
+    });
+
+    render(<SettingsPage />);
+    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+
+    const ttsSelect = (
+      await screen.findByText("Google Cloud (Neural2 / Chirp3-HD)")
+    ).closest("select") as HTMLSelectElement;
+    fireEvent.change(ttsSelect, { target: { value: "google" } });
+
+    // voice list loads and the Google key field appears
+    await screen.findByText("id-ID-Chirp3-HD-Kore");
+    const keyField = screen.getByPlaceholderText(/Google Cloud API key/i);
+    fireEvent.change(keyField, { target: { value: "gcp-123" } });
+
+    fireEvent.click(screen.getByText("Simpan Pengaturan"));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tts_provider: "google",
+          tts_voice: "id-ID-Chirp3-HD-Kore",
+          google_tts_key: "gcp-123",
+        }),
+      ),
+    );
   });
 
   it("keeps skripsi state and shows error when delete fails", async () => {

@@ -17,6 +17,10 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
       "api_key",
       "attack_points",
       "examiner_mode",
+      "tts_provider",
+      "tts_voice",
+      "google_tts_key",
+      "openai_tts_key",
     ] as const;
     for (const field of fields) {
       if (field in body && typeof body[field] !== "string") {

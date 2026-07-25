@@ -1,4 +1,10 @@
-import type { Turn, SettingsView, SkripsiInfo } from "./types.js";
+import type {
+  Turn,
+  SettingsView,
+  SkripsiInfo,
+  TtsVoice,
+  TtsAudio,
+} from "./types.js";
 
 async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => null);
@@ -51,6 +57,10 @@ export async function saveSettings(body: {
   model?: string;
   attack_points?: string;
   examiner_mode?: string;
+  tts_provider?: string;
+  tts_voice?: string;
+  google_tts_key?: string;
+  openai_tts_key?: string;
 }): Promise<SettingsView> {
   const res = await fetch("/api/settings", {
     method: "POST",
@@ -58,6 +68,20 @@ export async function saveSettings(body: {
     body: JSON.stringify(body),
   });
   return jsonOrThrow(res);
+}
+
+export async function ttsSpeak(text: string): Promise<TtsAudio> {
+  const res = await fetch("/api/tts/speak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  return jsonOrThrow(res);
+}
+
+export async function getTtsVoices(provider: string): Promise<TtsVoice[]> {
+  const res = await fetch(`/api/tts/voices?provider=${encodeURIComponent(provider)}`);
+  return (await jsonOrThrow(res)).voices;
 }
 
 export async function getSkripsi(): Promise<SkripsiInfo | null> {

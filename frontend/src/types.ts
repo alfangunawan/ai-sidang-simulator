@@ -11,6 +11,19 @@ export interface SettingsView {
   attack_points: string;
   examiner_mode: string;
   examiner_modes: ExaminerMode[];
+  tts_provider: string;
+  tts_voice: string;
+  has_google_tts_key: boolean;
+  has_openai_tts_key: boolean;
+}
+export interface TtsVoice {
+  name: string;
+  type: string;
+  gender?: string;
+}
+export interface TtsAudio {
+  audio: string;
+  mime: string;
 }
 export interface SkripsiInfo {
   filename: string;
