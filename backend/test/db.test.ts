@@ -36,3 +36,25 @@ describe("db migrations", () => {
     expect(db).toBeDefined();
   });
 });
+
+describe("sessions lifecycle columns", () => {
+  it("adds status/closed_at/assessment/close_declined_turn with status default 'active'", () => {
+    const db = openDb(":memory:");
+    const cols = (db.prepare("PRAGMA table_info(sessions)").all() as { name: string }[]).map(
+      (c) => c.name,
+    );
+    expect(cols).toEqual(
+      expect.arrayContaining(["status", "closed_at", "assessment", "close_declined_turn"]),
+    );
+
+    db.prepare("INSERT INTO sessions (id, created_at, label) VALUES (?,?,?)").run(
+      "s1",
+      "2026-01-01T00:00:00Z",
+      null,
+    );
+    const row = db.prepare("SELECT status FROM sessions WHERE id = ?").get("s1") as {
+      status: string;
+    };
+    expect(row.status).toBe("active");
+  });
+});

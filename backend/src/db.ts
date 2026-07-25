@@ -31,9 +31,25 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 `;
 
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  ddl: string,
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+
 export function openDb(path: string): Database.Database {
   const db = new Database(path);
   db.pragma("foreign_keys = ON");
   db.exec(MIGRATION);
+  addColumnIfMissing(db, "sessions", "status", "status TEXT NOT NULL DEFAULT 'active'");
+  addColumnIfMissing(db, "sessions", "closed_at", "closed_at TEXT");
+  addColumnIfMissing(db, "sessions", "assessment", "assessment TEXT");
+  addColumnIfMissing(db, "sessions", "close_declined_turn", "close_declined_turn INTEGER");
   return db;
 }
