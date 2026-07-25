@@ -52,4 +52,23 @@ export class ClaudeProvider implements LLMProvider {
       },
     };
   }
+
+  async generate(
+    system: string,
+    user: string,
+    maxTokens: number,
+  ): Promise<{ text: string; usage?: Record<string, number> }> {
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: maxTokens,
+      system: [{ type: "text", text: system }],
+      messages: [{ role: "user", content: user }],
+    });
+    const text = response.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("")
+      .trim();
+    return { text };
+  }
 }

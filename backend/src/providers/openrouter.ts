@@ -49,4 +49,33 @@ export class OpenRouterProvider implements LLMProvider {
     const reply = data.choices?.[0]?.message?.content?.trim() ?? "";
     return { reply };
   }
+
+  async generate(
+    system: string,
+    user: string,
+    maxTokens: number,
+  ): Promise<{ text: string; usage?: Record<string, number> }> {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        max_tokens: maxTokens,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`OpenRouter request failed (${res.status})`);
+    }
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    return { text: data.choices?.[0]?.message?.content?.trim() ?? "" };
+  }
 }
