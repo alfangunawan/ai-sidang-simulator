@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { createSession, getTurns, postTurn, deleteSession } from "../api.js";
-import type { Turn } from "../types.js";
+import {
+  createSession,
+  getTurns,
+  postTurn,
+  deleteSession,
+  getSettings,
+  saveSettings,
+} from "../api.js";
+import type { Turn, ExaminerMode } from "../types.js";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition.js";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis.js";
+import { useAudioLevel } from "../hooks/useAudioLevel.js";
+import { VoiceVisualizer, type VizState } from "../components/VoiceVisualizer.js";
 import { ConfirmModal } from "../components/ConfirmModal.js";
 
 const KEY = "sibiru_session_id";
@@ -14,15 +23,22 @@ export function SessionPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [modes, setModes] = useState<ExaminerMode[]>([]);
+  const [mode, setMode] = useState<string>("standar");
   const stt = useSpeechRecognition();
   const tts = useSpeechSynthesis();
+  const mic = useAudioLevel(stt.listening);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     (async () => {
       let id = localStorage.getItem(KEY);
       if (!id) {
-        id = await createSession();
+        try {
+          id = await createSession();
+        } catch {
+          return; // backend down on first load; leave as-is
+        }
         localStorage.setItem(KEY, id);
       }
       setSessionId(id);
@@ -38,11 +54,35 @@ export function SessionPage() {
     })();
   }, []);
 
+  // load examiner modes + current mode from settings
+  useEffect(() => {
+    getSettings()
+      .then((s) => {
+        setModes(s.examiner_modes);
+        setMode(s.examiner_mode);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
   }, [turns]);
 
   const pending = stt.supported ? stt.transcript : manual;
+  const vizState: VizState = stt.listening
+    ? "listening"
+    : tts.speaking
+      ? "speaking"
+      : "idle";
+
+  async function onModeChange(next: string) {
+    setMode(next);
+    try {
+      await saveSettings({ examiner_mode: next });
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
 
   async function send() {
     if (!sessionId || !pending.trim() || busy) return;
@@ -78,7 +118,22 @@ export function SessionPage() {
 
   return (
     <div>
-      <h2>Latihan Sidang</h2>
+      <div className="session-head">
+        <h2>Latihan Sidang</h2>
+        <label className="mode-picker">
+          Mode penguji:{" "}
+          <select value={mode} onChange={(e) => onModeChange(e.target.value)}>
+            {modes.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <VoiceVisualizer state={vizState} getLevel={mic.getLevel} />
+
       <div>
         {turns.map((t, i) => (
           <div key={i} className={`bubble ${t.role}`}>

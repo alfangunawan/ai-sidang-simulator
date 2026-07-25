@@ -42,6 +42,7 @@ export async function saveSettings(body: {
   api_key?: string;
   model?: string;
   attack_points?: string;
+  examiner_mode?: string;
 }): Promise<SettingsView> {
   const res = await fetch("/api/settings", {
     method: "POST",

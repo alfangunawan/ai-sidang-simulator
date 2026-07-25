@@ -112,8 +112,13 @@ export function SettingsPage() {
         onChange={(e) => setApiKey(e.target.value)}
       />
 
-      <label>Poin Serangan Penguji</label>
-      <textarea rows={8} value={attackPoints} onChange={(e) => setAttackPoints(e.target.value)} />
+      <label>Poin Serangan Penguji (opsional)</label>
+      <textarea
+        rows={8}
+        value={attackPoints}
+        placeholder="(opsional) Tempel poin serangan spesifik yang ingin dikejar penguji — mis. kelemahan Bab 3, klaim yang perlu bukti. Kosongkan untuk pertanyaan murni berbasis isi skripsi."
+        onChange={(e) => setAttackPoints(e.target.value)}
+      />
 
       <button className="primary" onClick={onSave}>
         Simpan Pengaturan

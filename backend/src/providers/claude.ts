@@ -19,7 +19,7 @@ export class ClaudeProvider implements LLMProvider {
   ): Promise<LLMResult> {
     const response = await this.client.messages.create({
       model: this.model,
-      max_tokens: 1024,
+      max_tokens: 300,
       system: [
         { type: "text", text: personaAttack, cache_control: { type: "ephemeral" } },
         { type: "text", text: skripsi, cache_control: { type: "ephemeral" } },

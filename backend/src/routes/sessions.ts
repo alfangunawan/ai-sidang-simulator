@@ -4,7 +4,7 @@ import type Database from "better-sqlite3";
 import { getProvider } from "../providers/index.js";
 import { getActiveConfig, getSetting } from "../repos/settings.js";
 import { getActiveDocument } from "../repos/documents.js";
-import { PERSONA_TONE } from "../persona.js";
+import { buildPersona } from "../persona.js";
 import {
   createSession,
   sessionExists,
@@ -59,7 +59,7 @@ export function sessionsRouter(
 
       const cfg = getActiveConfig(db, key);
       const provider = getProvider(cfg);
-      const personaAttack = `${PERSONA_TONE}\n\n${cfg.attackPoints}`;
+      const personaAttack = buildPersona(cfg.examinerMode, cfg.attackPoints);
       const result = await provider.sendTurn(
         personaAttack,
         doc.full_text,

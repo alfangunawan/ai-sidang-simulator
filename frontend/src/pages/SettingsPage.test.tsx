@@ -9,6 +9,13 @@ beforeEach(() => {
     model: "claude-sonnet-5",
     has_api_key: false,
     attack_points: "POIN A",
+    examiner_mode: "standar",
+    examiner_modes: [
+      { value: "santai", label: "Santai" },
+      { value: "standar", label: "Standar" },
+      { value: "kritis", label: "Kritis" },
+      { value: "galak", label: "Galak" },
+    ],
   });
   vi.spyOn(api, "getSkripsi").mockResolvedValue(null);
 });

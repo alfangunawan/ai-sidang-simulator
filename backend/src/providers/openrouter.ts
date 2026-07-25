@@ -27,7 +27,7 @@ export class OpenRouterProvider implements LLMProvider {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({ model: this.model, messages, max_tokens: 1024 }),
+      body: JSON.stringify({ model: this.model, messages, max_tokens: 300 }),
     });
 
     if (!res.ok) {
