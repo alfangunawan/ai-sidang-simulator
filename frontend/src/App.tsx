@@ -6,7 +6,10 @@ export default function App() {
   const [view, setView] = useState<"session" | "settings">("session");
   return (
     <div className="app">
-      <h1>SiBiru — Simulator Sidang Skripsi</h1>
+      <header className="masthead">
+        <h1 className="wordmark">SiBiru</h1>
+        <p className="tagline">Simulator Sidang Skripsi</p>
+      </header>
       <nav>
         <button
           className={view === "session" ? "primary" : ""}
