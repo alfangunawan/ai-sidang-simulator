@@ -20,6 +20,39 @@ describe("useSpeechSynthesis", () => {
     expect((window as any).speechSynthesis.speak).toHaveBeenCalledTimes(1);
   });
 
+  it("does not cancel the speech queue when nothing is currently speaking", async () => {
+    (window as any).speechSynthesis.speaking = false;
+    (window as any).speechSynthesis.pending = false;
+    const { result } = renderHook(() => useSpeechSynthesis("browser"));
+    await act(async () => {
+      await result.current.speak("Halo");
+    });
+    expect((window as any).speechSynthesis.cancel).not.toHaveBeenCalled();
+  });
+
+  it("selects an Indonesian voice when the browser offers one", async () => {
+    const idVoice = { lang: "id-ID", name: "Damayanti" };
+    (window as any).speechSynthesis.getVoices = vi.fn(() => [{ lang: "en-US" }, idVoice]);
+    let spoken: any;
+    (window as any).speechSynthesis.speak = vi.fn((u: any) => {
+      spoken = u;
+    });
+    const { result } = renderHook(() => useSpeechSynthesis("browser"));
+    await act(async () => {
+      await result.current.speak("Halo");
+    });
+    expect(spoken.voice).toBe(idVoice);
+  });
+
+  it("exposes an error when server synthesis fails instead of dropping it silently", async () => {
+    vi.spyOn(api, "ttsSpeak").mockRejectedValue(new Error("no key"));
+    const { result } = renderHook(() => useSpeechSynthesis("openai"));
+    await act(async () => {
+      await result.current.speak("Halo");
+    });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+  });
+
   it("server provider fetches audio and plays it", async () => {
     const play = vi.fn().mockResolvedValue(undefined);
     let srcUsed = "";

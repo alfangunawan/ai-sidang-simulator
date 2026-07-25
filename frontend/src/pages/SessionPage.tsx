@@ -159,13 +159,15 @@ export function SessionPage() {
             >
               Export
             </button>
-            <span className={`live ${vizState}`}>
+            <span className={`live ${tts.preparing ? "speaking" : vizState}`}>
               <i className="dot" />
-              {vizState === "speaking"
-                ? "Penguji bicara"
-                : vizState === "listening"
-                  ? "Merekam"
-                  : "Siap"}
+              {tts.preparing
+                ? "Menyiapkan suara…"
+                : vizState === "speaking"
+                  ? "Penguji bicara"
+                  : vizState === "listening"
+                    ? "Merekam"
+                    : "Siap"}
             </span>
           </div>
         </header>
@@ -237,6 +239,7 @@ export function SessionPage() {
       </div>
 
       {err && <p className="error">{err}</p>}
+      {tts.error && <p className="hint">🔇 {tts.error}</p>}
     </div>
   );
 }
