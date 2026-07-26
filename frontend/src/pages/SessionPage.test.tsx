@@ -26,6 +26,14 @@ beforeEach(() => {
       { value: "kritis", label: "Kritis" },
       { value: "galak", label: "Galak" },
     ],
+    examiner_type: "umum",
+    examiner_types: [
+      { value: "umum", label: "Umum (gabungan)" },
+      { value: "metodolog", label: "Metodolog" },
+      { value: "domain", label: "Ahli Domain" },
+      { value: "teknis", label: "Teknis (RPL/SI)" },
+      { value: "ketua", label: "Ketua Sidang" },
+    ],
     tts_provider: "browser",
     tts_voice: "",
     has_google_tts_key: false,
@@ -80,6 +88,21 @@ describe("SessionPage", () => {
 
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenCalledWith({ examiner_mode: "galak" }),
+    );
+  });
+
+  it("renders the examiner-type selector and persists a change", async () => {
+    render(<SessionPage onClosed={vi.fn()} />);
+    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+
+    const select = (await screen.findByText("Metodolog")).closest(
+      "select",
+    ) as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    fireEvent.change(select, { target: { value: "metodolog" } });
+
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenCalledWith({ examiner_type: "metodolog" }),
     );
   });
 

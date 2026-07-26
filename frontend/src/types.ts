@@ -4,6 +4,7 @@ export interface ExaminerMode {
   value: string;
   label: string;
 }
+export type ExaminerType = ExaminerMode;
 export interface SettingsView {
   provider: string;
   model: string;
@@ -11,6 +12,8 @@ export interface SettingsView {
   attack_points: string;
   examiner_mode: string;
   examiner_modes: ExaminerMode[];
+  examiner_type: string;
+  examiner_types: ExaminerType[];
   tts_provider: string;
   tts_voice: string;
   has_google_tts_key: boolean;

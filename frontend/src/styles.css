@@ -80,6 +80,12 @@ nav button.primary { background: var(--brand); color: #fff; }
   font-size: 1.35rem;
   margin: 0;
 }
+.picker-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
 .mode-picker { font-size: .85rem; color: var(--ink-soft); }
 .mode-picker select {
   width: auto;

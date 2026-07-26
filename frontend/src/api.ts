@@ -90,6 +90,7 @@ export async function saveSettings(body: {
   model?: string;
   attack_points?: string;
   examiner_mode?: string;
+  examiner_type?: string;
   tts_provider?: string;
   tts_voice?: string;
   google_tts_key?: string;

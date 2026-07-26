@@ -8,7 +8,7 @@ import {
   closeSession,
   continueSession,
 } from "../api.js";
-import type { Turn, ExaminerMode, Assessment } from "../types.js";
+import type { Turn, ExaminerMode, ExaminerType, Assessment } from "../types.js";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition.js";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis.js";
 import { useAudioLevel } from "../hooks/useAudioLevel.js";
@@ -28,6 +28,8 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
   const [err, setErr] = useState<string | null>(null);
   const [modes, setModes] = useState<ExaminerMode[]>([]);
   const [mode, setMode] = useState<string>("standar");
+  const [types, setTypes] = useState<ExaminerType[]>([]);
+  const [type, setType] = useState<string>("umum");
   const [ttsProvider, setTtsProvider] = useState<string>("browser");
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeSource, setCloseSource] = useState<"ai" | "manual">("manual");
@@ -61,12 +63,14 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
     })();
   }, []);
 
-  // load examiner modes + current mode from settings
+  // load examiner modes/types + current selection from settings
   useEffect(() => {
     getSettings()
       .then((s) => {
         setModes(s.examiner_modes);
         setMode(s.examiner_mode);
+        setTypes(s.examiner_types ?? []);
+        setType(s.examiner_type ?? "umum");
         setTtsProvider(s.tts_provider);
       })
       .catch(() => {});
@@ -88,6 +92,15 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
     setMode(next);
     try {
       await saveSettings({ examiner_mode: next });
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  async function onTypeChange(next: string) {
+    setType(next);
+    try {
+      await saveSettings({ examiner_type: next });
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -175,16 +188,28 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
     <div>
       <div className="session-head">
         <h2>Latihan Sidang</h2>
-        <label className="mode-picker">
-          Mode penguji:{" "}
-          <select value={mode} onChange={(e) => onModeChange(e.target.value)}>
-            {modes.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="picker-row">
+          <label className="mode-picker">
+            Mode penguji:{" "}
+            <select value={mode} onChange={(e) => onModeChange(e.target.value)}>
+              {modes.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mode-picker">
+            Tipe penguji:{" "}
+            <select value={type} onChange={(e) => onTypeChange(e.target.value)}>
+              {types.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="orb-stage">
