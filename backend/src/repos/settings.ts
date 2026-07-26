@@ -3,7 +3,9 @@ import { encrypt, decrypt } from "../crypto.js";
 import {
   DEFAULT_ATTACK_POINTS,
   DEFAULT_EXAMINER_MODE,
+  DEFAULT_EXAMINER_TYPE,
   EXAMINER_MODES,
+  EXAMINER_TYPES,
 } from "../persona.js";
 
 const DEFAULTS: Record<string, string> = {
@@ -11,6 +13,7 @@ const DEFAULTS: Record<string, string> = {
   model: "claude-sonnet-5",
   attack_points: DEFAULT_ATTACK_POINTS,
   examiner_mode: DEFAULT_EXAMINER_MODE,
+  examiner_type: DEFAULT_EXAMINER_TYPE,
   tts_provider: "browser",
   tts_voice: "",
 };
@@ -48,6 +51,8 @@ export function getSettingsView(db: Database.Database): {
   attack_points: string;
   examiner_mode: string;
   examiner_modes: { value: string; label: string }[];
+  examiner_type: string;
+  examiner_types: { value: string; label: string }[];
   tts_provider: string;
   tts_voice: string;
   has_google_tts_key: boolean;
@@ -62,6 +67,11 @@ export function getSettingsView(db: Database.Database): {
     examiner_modes: Object.entries(EXAMINER_MODES).map(([value, m]) => ({
       value,
       label: m.label,
+    })),
+    examiner_type: getSetting(db, "examiner_type") ?? DEFAULTS.examiner_type,
+    examiner_types: Object.entries(EXAMINER_TYPES).map(([value, t]) => ({
+      value,
+      label: t.label,
     })),
     tts_provider: getSetting(db, "tts_provider") ?? DEFAULTS.tts_provider,
     tts_voice: getSetting(db, "tts_voice") ?? DEFAULTS.tts_voice,
@@ -79,6 +89,7 @@ export function saveSettings(
     model?: string;
     attack_points?: string;
     examiner_mode?: string;
+    examiner_type?: string;
     tts_provider?: string;
     tts_voice?: string;
     google_tts_key?: string;
@@ -91,6 +102,8 @@ export function saveSettings(
     setSetting(db, "attack_points", body.attack_points);
   if (body.examiner_mode !== undefined)
     setSetting(db, "examiner_mode", body.examiner_mode);
+  if (body.examiner_type !== undefined)
+    setSetting(db, "examiner_type", body.examiner_type);
   if (body.api_key !== undefined && body.api_key !== "") {
     setSetting(db, "api_key", encrypt(body.api_key, key));
   }
@@ -149,6 +162,7 @@ export function getActiveConfig(
   apiKey: string;
   attackPoints: string;
   examinerMode: string;
+  examinerType: string;
 } {
   const enc = getSetting(db, "api_key");
   if (!enc) throw new Error("API key belum diset");
@@ -158,5 +172,6 @@ export function getActiveConfig(
     apiKey: decrypt(enc, key),
     attackPoints: getSetting(db, "attack_points") ?? DEFAULTS.attack_points,
     examinerMode: getSetting(db, "examiner_mode") ?? DEFAULTS.examiner_mode,
+    examinerType: getSetting(db, "examiner_type") ?? DEFAULTS.examiner_type,
   };
 }

@@ -80,7 +80,11 @@ export function sessionsRouter(
 
       const cfg = getActiveConfig(db, key);
       const provider = getProvider(cfg);
-      const personaAttack = buildPersona(cfg.examinerMode, cfg.attackPoints);
+      const personaAttack = buildPersona(
+        cfg.examinerMode,
+        cfg.attackPoints,
+        cfg.examinerType,
+      );
       const result = await provider.sendTurn(
         personaAttack,
         doc.full_text,

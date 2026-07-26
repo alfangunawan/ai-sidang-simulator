@@ -2,9 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   buildPersona,
   EXAMINER_MODES,
+  EXAMINER_TYPES,
   DEFAULT_EXAMINER_MODE,
+  DEFAULT_EXAMINER_TYPE,
   DEFAULT_ATTACK_POINTS,
+  PROBING_RULES,
+  ESCALATION_RULES,
 } from "../src/persona.js";
+import { QUESTION_BANK, CRITIQUE_MODULES } from "../src/questionBank.js";
 
 describe("persona", () => {
   it("default attack points are empty (optional)", () => {
@@ -40,6 +45,67 @@ describe("persona", () => {
     expect(buildPersona("tidak-ada", "")).toContain(
       EXAMINER_MODES[DEFAULT_EXAMINER_MODE].tone,
     );
+  });
+});
+
+describe("persona probing rules", () => {
+  it("embeds the probing and escalation rules", () => {
+    const p = buildPersona("standar", "");
+    expect(p).toContain(PROBING_RULES);
+    expect(p).toContain(ESCALATION_RULES);
+  });
+
+  it("forbids moving on when an answer lacks specifics", () => {
+    expect(PROBING_RULES).toMatch(/JANGAN pindah topik/);
+    expect(PROBING_RULES).toMatch(/bab\/halaman\/tabel/);
+  });
+
+  it("caps follow-ups so the examiner cannot stall on one topic", () => {
+    expect(ESCALATION_RULES).toMatch(/Maksimal 3 follow-up/);
+  });
+
+  it("targets 8-15 main questions per sidang", () => {
+    expect(buildPersona("standar", "")).toMatch(/8–15 pertanyaan utama/);
+  });
+});
+
+describe("persona examiner types", () => {
+  it("includes the selected archetype's focus and not the others", () => {
+    const teknis = buildPersona("standar", "", "teknis");
+    expect(teknis).toContain(EXAMINER_TYPES.teknis.focus);
+    expect(teknis).not.toContain(EXAMINER_TYPES.metodolog.focus);
+  });
+
+  it("defaults to the umum archetype when no type is given", () => {
+    expect(buildPersona("standar", "")).toContain(
+      EXAMINER_TYPES[DEFAULT_EXAMINER_TYPE].focus,
+    );
+  });
+
+  it("falls back to the default archetype for an unknown type", () => {
+    expect(buildPersona("standar", "", "tidak-ada")).toContain(
+      EXAMINER_TYPES[DEFAULT_EXAMINER_TYPE].focus,
+    );
+  });
+});
+
+describe("persona question bank", () => {
+  it("embeds a question from every core phase", () => {
+    const p = buildPersona("standar", "");
+    for (const phase of ["Metodologi", "Hasil & Pembahasan", "Kesimpulan & Kontribusi"]) {
+      expect(p).toContain(QUESTION_BANK[phase][0]);
+    }
+  });
+
+  it("tells the model to adapt rather than read the bank verbatim", () => {
+    expect(buildPersona("standar", "")).toMatch(/Jangan membacakan pertanyaan apa adanya/);
+  });
+
+  it("embeds the conditional critique modules", () => {
+    expect(buildPersona("standar", "")).toContain(CRITIQUE_MODULES);
+    expect(CRITIQUE_MODULES).toMatch(/BUKAN persentase/);
+    expect(CRITIQUE_MODULES).toMatch(/halusinasi/);
+    expect(CRITIQUE_MODULES).toMatch(/krisis/);
   });
 });
 

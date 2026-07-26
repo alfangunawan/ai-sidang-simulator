@@ -1,5 +1,7 @@
 export const CLOSE_MARKER = "[[CUKUP]]";
-export const MIN_EXAMINER_QUESTIONS = 10;
+// Sidang sarjana mengalokasikan ~30 menit tanya jawab: 8–15 pertanyaan utama
+// plus 2–4 follow-up per topik. Floor ini menahan AI menutup sidang terlalu dini.
+export const MIN_EXAMINER_QUESTIONS = 15;
 export const CLOSE_COOLDOWN = 3;
 
 export function stripCloseMarker(reply: string): { reply: string; hasMarker: boolean } {
