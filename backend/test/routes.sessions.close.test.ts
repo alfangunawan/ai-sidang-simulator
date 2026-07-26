@@ -51,7 +51,7 @@ describe("close/continue/result routes", () => {
     const closed = await request(app).post(`/sessions/${id}/close`).send({});
     expect(closed.status).toBe(200);
     expect(closed.body.assessment.final_score).toBe(78);
-    expect(closed.body.assessment.grade).toBe("B");
+    expect(closed.body.assessment.grade).toBe("AB"); // Telkom band: 75-85
 
     const result = await request(app).get(`/sessions/${id}/result`);
     expect(result.body.status).toBe("closed");

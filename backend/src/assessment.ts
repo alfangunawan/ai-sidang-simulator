@@ -23,16 +23,25 @@ function clamp(n: unknown): number {
   return Math.max(0, Math.min(100, Math.round(x)));
 }
 
+/**
+ * Skema huruf mutu Telkom University (Pedoman Akademik / PU.022/AKD01/AKD-BPA/2024):
+ * A >85, AB 75–85, B 65–75, BC 60–65, C 50–60 (batas minimal lulus sarjana),
+ * D 40–50, E <=40.
+ */
 export function deriveGrade(score: number): string {
-  if (score >= 85) return "A";
-  if (score >= 70) return "B";
-  if (score >= 55) return "C";
-  return "D";
+  if (score > 85) return "A";
+  if (score >= 75) return "AB";
+  if (score >= 65) return "B";
+  if (score >= 60) return "BC";
+  if (score >= 50) return "C";
+  if (score > 40) return "D";
+  return "E";
 }
 
+// KD.0034/AKD9/EB-DEK/2020: lulus bila skor total >50 (minimal huruf mutu C).
 export function deriveVerdict(score: number): string {
-  if (score >= 80) return "Lulus";
-  if (score >= 60) return "Lulus dengan revisi";
+  if (score >= 75) return "Lulus";
+  if (score > 50) return "Lulus dengan revisi";
   return "Tidak lulus";
 }
 
@@ -58,16 +67,22 @@ Nilai empat dimensi (skor 0-100 tiap dimensi):
 - kualitas_orisinalitas: mutu dan orisinalitas skripsi.
 - argumentasi: kemampuan menjawab, mempertahankan, dan beralasan.
 
+Dasar penilaian (nilai dari transkrip, bukan dari kesan umum):
+- Jawaban yang menyebut data spesifik (angka, nama metode, bab/halaman, tabel) bernilai jauh lebih tinggi daripada jawaban umum atau normatif.
+- Jawaban yang mengelak, berputar, atau bertentangan dengan isi naskah menurunkan skor argumentasi dan penguasaan_materi.
+- Pertanyaan yang tidak terjawab sama sekali harus tercermin sebagai kekurangan, bukan diabaikan.
+- Nilai penguasaan_materi dan argumentasi paling berat karena keduanya diuji langsung lewat tanya jawab.
+
 Keluarkan HANYA JSON valid (tanpa teks lain, tanpa code fence) dengan bentuk persis:
 {
   "scores": { "penguasaan_materi": <0-100>, "metodologi": <0-100>, "kualitas_orisinalitas": <0-100>, "argumentasi": <0-100> },
   "final_score": <0-100>,
-  "grade": "A|B|C|D",
+  "grade": "A|AB|B|BC|C|D|E",
   "verdict": "Lulus | Lulus dengan revisi | Tidak lulus",
   "ringkasan": "<2-4 kalimat penilaian menyeluruh>",
   "kelebihan": ["<poin>"],
-  "kekurangan": ["<poin>"],
-  "saran": ["<saran perbaikan konkret>"]
+  "kekurangan": ["<poin, sebutkan pertanyaan mana yang tidak terjawab dengan baik>"],
+  "saran": ["<revisi konkret: sebut bab/bagian yang harus diperbaiki dan apa yang harus ditambahkan>"]
 }`;
 }
 

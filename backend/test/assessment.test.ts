@@ -10,7 +10,7 @@ import {
 const VALID = JSON.stringify({
   scores: { penguasaan_materi: 80, metodologi: 70, kualitas_orisinalitas: 75, argumentasi: 90 },
   final_score: 79,
-  grade: "B",
+  grade: "AB",
   verdict: "Lulus dengan revisi",
   ringkasan: "Cukup baik.",
   kelebihan: ["Argumentasi kuat"],
@@ -19,16 +19,22 @@ const VALID = JSON.stringify({
 });
 
 describe("assessment helpers", () => {
-  it("derives grade from score bands", () => {
+  // Skema huruf mutu Telkom University: A >85, AB 75-85, B 65-75, BC 60-65,
+  // C 50-60 (batas minimal lulus), D 40-50, E <=40.
+  it("derives grade from the Telkom letter-grade bands", () => {
     expect(deriveGrade(90)).toBe("A");
+    expect(deriveGrade(79)).toBe("AB");
     expect(deriveGrade(72)).toBe("B");
-    expect(deriveGrade(60)).toBe("C");
-    expect(deriveGrade(40)).toBe("D");
+    expect(deriveGrade(62)).toBe("BC");
+    expect(deriveGrade(55)).toBe("C");
+    expect(deriveGrade(45)).toBe("D");
+    expect(deriveGrade(30)).toBe("E");
   });
 
-  it("derives verdict from score bands", () => {
+  it("derives verdict from score bands (lulus requires >50)", () => {
     expect(deriveVerdict(85)).toBe("Lulus");
     expect(deriveVerdict(65)).toBe("Lulus dengan revisi");
+    expect(deriveVerdict(51)).toBe("Lulus dengan revisi");
     expect(deriveVerdict(50)).toBe("Tidak lulus");
   });
 
@@ -52,7 +58,7 @@ describe("parseAssessment", () => {
     const a = parseAssessment(VALID);
     expect(a.scores.penguasaan_materi).toBe(80);
     expect(a.final_score).toBe(79);
-    expect(a.grade).toBe("B");
+    expect(a.grade).toBe("AB");
     expect(a.kelebihan).toEqual(["Argumentasi kuat"]);
   });
 
