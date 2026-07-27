@@ -20,7 +20,10 @@ describe("CollabSettings", () => {
     fireEvent.change(screen.getByLabelText(/kode undangan/i), { target: { value: "abc123abc123" } });
     fireEvent.click(screen.getByRole("button", { name: /gabung/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/collab/join", expect.objectContaining({ method: "POST" })));
-    await screen.findByText(/host/i);
+    // Hosting and joining now render independently (a non-host can still see
+    // "Jadi host"), so anchor on the joined confirmation line itself rather
+    // than the ambiguous substring "host" (which "Jadi host" also contains).
+    await screen.findByText(/tergabung dengan/i);
   });
 
   it("shows host invite code + share toggles when hosting", async () => {
@@ -30,5 +33,20 @@ describe("CollabSettings", () => {
     render(<CollabSettings />);
     expect(await screen.findByText("deadbeefdead")).toBeTruthy();
     expect(screen.getByLabelText(/bagikan ai/i)).toBeTruthy();
+  });
+
+  it("shows both the host panel and the joined panel when a user hosts AND is joined elsewhere", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      jsonRes({
+        hosting: { invite_code: "cafebabecafe", shares: { share_ai: 1, share_tts: 0, share_stt: 0 }, members: [], usage: { total: { calls: 0 }, by_member: [] } },
+        joined: { host_username: "otherhost", shares: { share_ai: 0, share_tts: 1, share_stt: 0 } },
+      }),
+    ) as any;
+    render(<CollabSettings />);
+    expect(await screen.findByText("cafebabecafe")).toBeTruthy();
+    expect(await screen.findByText(/otherhost/i)).toBeTruthy();
+    // both panels' own actions are present — not mutually exclusive
+    expect(screen.getByRole("button", { name: /bubarkan/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^keluar$/i })).toBeTruthy();
   });
 });

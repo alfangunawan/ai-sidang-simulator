@@ -92,35 +92,19 @@ export function CollabSettings() {
         </div>
       </div>
 
-      {!hosting && !joined && (
-        <>
-          <div className="field">
-            <button onClick={onBecomeHost}>Jadi host</button>
-            <p className="hint">
-              Jadi host untuk membagikan key Anda ke anggota tim lewat kode undangan.
-            </p>
-          </div>
-          <div className="field">
-            <label htmlFor="collab-code">Kode undangan</label>
-            <div className="inline-row">
-              <input
-                id="collab-code"
-                value={code}
-                placeholder="tempel kode undangan host"
-                onChange={(e) => setCode(e.target.value)}
-              />
-              <button onClick={onJoin} disabled={!code.trim()}>
-                Gabung
-              </button>
-            </div>
-          </div>
-        </>
+      {!hosting && (
+        <div className="field">
+          <button onClick={onBecomeHost}>Jadi host</button>
+          <p className="hint">
+            Jadi host untuk membagikan key Anda ke anggota tim lewat kode undangan.
+          </p>
+        </div>
       )}
 
       {hosting && (
         <>
           <div className="field">
-            <label>Kode undangan</label>
+            <label>Kode undangan Anda</label>
             <div className="inline-row">
               <code className="collab-code">{hosting.invite_code}</code>
               <button
@@ -205,6 +189,23 @@ export function CollabSettings() {
             Bubarkan
           </button>
         </>
+      )}
+
+      {!joined && (
+        <div className="field">
+          <label htmlFor="collab-code">Kode undangan</label>
+          <div className="inline-row">
+            <input
+              id="collab-code"
+              value={code}
+              placeholder="tempel kode undangan host"
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button onClick={onJoin} disabled={!code.trim()}>
+              Gabung
+            </button>
+          </div>
+        </div>
       )}
 
       {joined && (
