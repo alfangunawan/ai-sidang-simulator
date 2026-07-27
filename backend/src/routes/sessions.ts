@@ -2,7 +2,8 @@ import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getProvider } from "../providers/index.js";
-import { getActiveConfig, getSetting } from "../repos/settings.js";
+import { getSetting } from "../repos/settings.js";
+import { getEffectiveLlmConfig, resolveSourceUser } from "../effectiveConfig.js";
 import { getActiveDocument } from "../repos/documents.js";
 import { buildPersona } from "../persona.js";
 import {
@@ -76,8 +77,8 @@ export function sessionsRouter(
     if (!transcript) {
       return res.status(400).json({ error: "Transkrip kosong" });
     }
-    if (getSetting(db, userId, "api_key") === null) {
-      return res.status(400).json({ error: "Set API key di Settings dulu" });
+    if (getSetting(db, resolveSourceUser(db, userId, "ai"), "api_key") === null) {
+      return res.status(400).json({ error: "Set API key di Settings dulu (atau gabung kolaborasi yang membagikan AI)" });
     }
     const doc = getActiveDocument(db, userId);
     if (!doc) {
@@ -90,7 +91,7 @@ export function sessionsRouter(
       userTurnNumber = nextTurnNumber(db, sessionId);
       addTurn(db, sessionId, userTurnNumber, "user", transcript, now());
 
-      const cfg = getActiveConfig(db, userId, key);
+      const cfg = getEffectiveLlmConfig(db, userId, key);
       const provider = getProvider(cfg);
       const personaAttack = buildPersona(
         cfg.examinerMode,
@@ -106,7 +107,7 @@ export function sessionsRouter(
       );
 
       // Recorded before the empty-reply guard: the call was billed either way.
-      recordUsage(db, userId, now(), cfg.provider, cfg.model, "turn", result.usage);
+      recordUsage(db, userId, resolveSourceUser(db, userId, "ai"), now(), cfg.provider, cfg.model, "turn", result.usage);
 
       const { reply, hasMarker } = stripCloseMarker(result.reply);
 
@@ -166,8 +167,8 @@ export function sessionsRouter(
     if (meta?.status === "closed" && meta.assessment) {
       return res.json({ assessment: JSON.parse(meta.assessment) as Assessment });
     }
-    if (getSetting(db, userId, "api_key") === null) {
-      return res.status(400).json({ error: "Set API key di Settings dulu" });
+    if (getSetting(db, resolveSourceUser(db, userId, "ai"), "api_key") === null) {
+      return res.status(400).json({ error: "Set API key di Settings dulu (atau gabung kolaborasi yang membagikan AI)" });
     }
     const doc = getActiveDocument(db, userId);
     if (!doc) {
@@ -175,7 +176,7 @@ export function sessionsRouter(
     }
 
     try {
-      const cfg = getActiveConfig(db, userId, key);
+      const cfg = getEffectiveLlmConfig(db, userId, key);
       const provider = getProvider(cfg);
       const system = buildAssessmentSystem();
       const user = buildAssessmentUser(doc.full_text, formatTranscript(getTurns(db, sessionId)));
@@ -184,7 +185,7 @@ export function sessionsRouter(
       // whose output failed to parse.
       const attempt = async () => {
         const out = await provider.generate(system, user, ASSESSMENT_MAX_TOKENS);
-        recordUsage(db, userId, now(), cfg.provider, cfg.model, "assessment", out.usage);
+        recordUsage(db, userId, resolveSourceUser(db, userId, "ai"), now(), cfg.provider, cfg.model, "assessment", out.usage);
         if (out.truncated) throw new Error(TRUNCATED);
         return parseAssessment(out.text);
       };
