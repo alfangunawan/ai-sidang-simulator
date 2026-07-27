@@ -7,6 +7,7 @@ import {
   getLlmKey,
 } from "../repos/settings.js";
 import { getProvider } from "../providers/index.js";
+import { getUsageView, resetUsage } from "../repos/usage.js";
 
 export function settingsRouter(db: Database.Database, key: Buffer): Router {
   const r = Router();
@@ -23,10 +24,13 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
       "api_key",
       "attack_points",
       "examiner_mode",
+      "examiner_type",
       "tts_provider",
       "tts_voice",
       "google_tts_key",
       "openai_tts_key",
+      "stt_provider",
+      "openai_stt_key",
     ] as const;
     for (const field of fields) {
       if (field in body && typeof body[field] !== "string") {
@@ -35,6 +39,15 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
     }
     saveSettings(db, key, body);
     res.json(getSettingsView(db));
+  });
+
+  r.get("/usage", (_req, res) => {
+    res.json(getUsageView(db));
+  });
+
+  r.delete("/usage", (_req, res) => {
+    resetUsage(db);
+    res.json(getUsageView(db));
   });
 
   // Auth/connection check for the LLM provider. Uses the typed key if provided,

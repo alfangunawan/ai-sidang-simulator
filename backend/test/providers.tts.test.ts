@@ -5,7 +5,7 @@ import {
   openaiSynth,
   OPENAI_VOICES,
 } from "../src/providers/tts/index.js";
-import { synthesize } from "../src/providers/tts/index.js";
+import { synthesize, chunkText } from "../src/providers/tts/index.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -103,6 +103,30 @@ describe("openaiSynth", () => {
   });
 });
 
+describe("chunkText", () => {
+  it("keeps a short reply as one chunk", () => {
+    expect(chunkText("Halo dunia.", 100)).toEqual(["Halo dunia."]);
+  });
+
+  it("splits a long reply on sentence boundaries, each under the cap", () => {
+    const text = Array.from({ length: 12 }, (_, i) => `Kalimat nomor ${i} yang cukup panjang.`).join(" ");
+    const chunks = chunkText(text, 80);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(Buffer.byteLength(c, "utf8")).toBeLessThanOrEqual(80);
+    expect(chunks.join(" ")).toBe(text);
+  });
+
+  it("word-splits a single sentence that alone exceeds the cap", () => {
+    const text = "kata ".repeat(40).trim();
+    const chunks = chunkText(text, 50);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(Buffer.byteLength(c, "utf8")).toBeLessThanOrEqual(50);
+    expect(chunks.join(" ")).toBe(text);
+  });
+});
+
 describe("synthesize dispatch", () => {
   it("routes google and openai, rejects browser/unknown", async () => {
     vi.stubGlobal(
@@ -118,5 +142,57 @@ describe("synthesize dispatch", () => {
     await expect(
       synthesize({ provider: "nope", voice: "", apiKey: "k" }, "hi"),
     ).rejects.toThrow(/tidak didukung/);
+  });
+
+  it("retries once when the connection drops, but not on a bad key", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        if (calls === 1) throw new Error("fetch failed");
+        return { ok: true, status: 200, json: async () => ({ audioContent: "QQ==" }) };
+      }) as any,
+    );
+    const out = await synthesize({ provider: "google", voice: "v", apiKey: "k" }, "hi");
+    expect(out.audio).toBe("QQ==");
+    expect(calls).toBe(2);
+
+    calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        return { ok: false, status: 403, text: async () => "API key not valid" };
+      }) as any,
+    );
+    await expect(
+      synthesize({ provider: "google", voice: "v", apiKey: "k" }, "hi"),
+    ).rejects.toThrow(/403.*API key not valid/);
+    expect(calls).toBe(1);
+  });
+
+  it("splits an over-long reply into several calls and joins the audio", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: any) => {
+        calls.push(JSON.parse(init.body).input.text);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ audioContent: Buffer.from([calls.length]).toString("base64") }),
+        };
+      }) as any,
+    );
+
+    // Well past Google's 5000-byte input limit.
+    const long = "Jelaskan alasan teknis pemilihan metode ini. ".repeat(200);
+    const out = await synthesize({ provider: "google", voice: "v", apiKey: "k" }, long);
+
+    expect(calls.length).toBeGreaterThan(1);
+    for (const c of calls) expect(Buffer.byteLength(c, "utf8")).toBeLessThanOrEqual(3800);
+    expect([...Buffer.from(out.audio, "base64")]).toEqual(calls.map((_, i) => i + 1));
+    expect(out.mime).toBe("audio/mpeg");
   });
 });

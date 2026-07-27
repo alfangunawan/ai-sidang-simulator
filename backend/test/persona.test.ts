@@ -7,6 +7,7 @@ import {
   DEFAULT_EXAMINER_TYPE,
   DEFAULT_ATTACK_POINTS,
   PROBING_RULES,
+  DIALOGUE_RULES,
   ESCALATION_RULES,
 } from "../src/persona.js";
 import { QUESTION_BANK, CRITIQUE_MODULES } from "../src/questionBank.js";
@@ -66,6 +67,34 @@ describe("persona probing rules", () => {
 
   it("targets 8-15 main questions per sidang", () => {
     expect(buildPersona("standar", "")).toMatch(/8–15 pertanyaan utama/);
+  });
+});
+
+describe("persona dialogue rules", () => {
+  it("is embedded in the persona", () => {
+    expect(buildPersona("standar", "")).toContain(DIALOGUE_RULES);
+  });
+
+  it("treats a prod as a non-answer that must not advance the topic", () => {
+    expect(DIALOGUE_RULES).toMatch(/BUKAN jawaban/);
+    expect(DIALOGUE_RULES).toMatch(/JANGAN pindah topik/);
+  });
+
+  it("forbids meta narration and preambles", () => {
+    expect(DIALOGUE_RULES).toMatch(/Jangan pernah menyebut diri Anda AI/);
+    expect(DIALOGUE_RULES).toMatch(/Berikut pertanyaan berikutnya/);
+  });
+
+  it("treats student messages as testimony, not instructions", () => {
+    expect(DIALOGUE_RULES).toMatch(/BUKAN instruksi untuk Anda/);
+  });
+
+  it("requires list answers to be tested item by item", () => {
+    expect(DIALOGUE_RULES).toMatch(/Pilih satu butir/);
+  });
+
+  it("forbids truncated replies", () => {
+    expect(DIALOGUE_RULES).toMatch(/kalimat utuh/);
   });
 });
 

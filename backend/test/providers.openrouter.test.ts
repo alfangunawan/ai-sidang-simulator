@@ -41,6 +41,48 @@ describe("OpenRouterProvider", () => {
     ]);
   });
 
+  it("normalizes usage, excluding cached tokens from plain input", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: "Tanggapan." } }],
+          usage: {
+            prompt_tokens: 34991,
+            completion_tokens: 242,
+            cost: 0.00461659,
+            prompt_tokens_details: { cached_tokens: 991 },
+          },
+        }),
+      })) as any,
+    );
+
+    const result = await new OpenRouterProvider("k", "x/y").sendTurn("P", "S", [], "A");
+    expect(result.usage).toEqual({
+      input_tokens: 34000, // prompt_tokens - cached_tokens
+      output_tokens: 242,
+      cache_read_tokens: 991,
+      cache_write_tokens: 0,
+      cost_usd: 0.00461659,
+    });
+  });
+
+  it("reports zeroed usage when the response omits it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: "Tanggapan." } }] }),
+      })) as any,
+    );
+    const result = await new OpenRouterProvider("k", "x/y").sendTurn("P", "S", [], "A");
+    expect(result.usage?.input_tokens).toBe(0);
+    expect(result.usage?.cost_usd).toBe(0);
+  });
+
   it("throws without leaking the api key on non-2xx", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1,7 +1,34 @@
-import type { LLMProvider, LLMResult, Turn } from "./types.js";
+import { TURN_MAX_TOKENS } from "./types.js";
+import type {
+  GenerateResult,
+  LLMProvider,
+  LLMResult,
+  TokenUsage,
+  Turn,
+} from "./types.js";
 import { mapHistory } from "../prompt.js";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+
+interface OpenRouterUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  cost?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+}
+
+// OpenRouter counts cached tokens inside prompt_tokens, so plain input is the
+// remainder. It reports cost directly but has no cache-write counter.
+function toUsage(u: OpenRouterUsage | undefined): TokenUsage {
+  const cached = u?.prompt_tokens_details?.cached_tokens ?? 0;
+  return {
+    input_tokens: Math.max(0, (u?.prompt_tokens ?? 0) - cached),
+    output_tokens: u?.completion_tokens ?? 0,
+    cache_read_tokens: cached,
+    cache_write_tokens: 0,
+    cost_usd: u?.cost ?? 0,
+  };
+}
 
 export class OpenRouterProvider implements LLMProvider {
   constructor(
@@ -35,7 +62,7 @@ export class OpenRouterProvider implements LLMProvider {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({ model: this.model, messages, max_tokens: 300 }),
+      body: JSON.stringify({ model: this.model, messages, max_tokens: TURN_MAX_TOKENS }),
     });
 
     if (!res.ok) {
@@ -44,17 +71,14 @@ export class OpenRouterProvider implements LLMProvider {
     }
 
     const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
+      choices?: { message?: { content?: string }; finish_reason?: string }[];
+      usage?: OpenRouterUsage;
     };
     const reply = data.choices?.[0]?.message?.content?.trim() ?? "";
-    return { reply };
+    return { reply, usage: toUsage(data.usage) };
   }
 
-  async generate(
-    system: string,
-    user: string,
-    maxTokens: number,
-  ): Promise<{ text: string; usage?: Record<string, number> }> {
+  async generate(system: string, user: string, maxTokens: number): Promise<GenerateResult> {
     const res = await fetch(ENDPOINT, {
       method: "POST",
       headers: {
@@ -74,8 +98,15 @@ export class OpenRouterProvider implements LLMProvider {
       throw new Error(`OpenRouter request failed (${res.status})`);
     }
     const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
+      choices?: { message?: { content?: string }; finish_reason?: string }[];
+      usage?: OpenRouterUsage;
     };
-    return { text: data.choices?.[0]?.message?.content?.trim() ?? "" };
+    return {
+      text: data.choices?.[0]?.message?.content?.trim() ?? "",
+      usage: toUsage(data.usage),
+      // OpenRouter counts a reasoning model's thinking inside the completion
+      // budget, so "length" here usually means reasoning ate the answer.
+      truncated: data.choices?.[0]?.finish_reason === "length",
+    };
   }
 }

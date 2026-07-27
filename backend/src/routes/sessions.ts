@@ -26,7 +26,12 @@ import {
   parseAssessment,
   type Assessment,
 } from "../assessment.js";
-import { stripCloseMarker, shouldProposeClose } from "../sidang.js";
+import { stripCloseMarker, shouldProposeClose, withNonAnswerNudge } from "../sidang.js";
+import { recordUsage } from "../repos/usage.js";
+import { ASSESSMENT_MAX_TOKENS } from "../providers/types.js";
+
+// Internal marker: the model hit its output ceiling before finishing the JSON.
+const TRUNCATED = "assessment truncated";
 
 export function sessionsRouter(
   db: Database.Database,
@@ -85,18 +90,24 @@ export function sessionsRouter(
         cfg.attackPoints,
         cfg.examinerType,
       );
+      // The nudge steers the model only; the transcript keeps what was actually said.
       const result = await provider.sendTurn(
         personaAttack,
         doc.full_text,
         history,
-        transcript,
+        withNonAnswerNudge(transcript),
       );
 
-      if (result.usage) {
-        console.log("[turn usage]", result.usage);
-      }
+      // Recorded before the empty-reply guard: the call was billed either way.
+      recordUsage(db, now(), cfg.provider, cfg.model, "turn", result.usage);
 
       const { reply, hasMarker } = stripCloseMarker(result.reply);
+
+      // A blank reply (reasoning model spending its whole budget before writing
+      // any text) must not land in the transcript as an empty bubble.
+      if (!reply) {
+        throw new Error("empty reply from provider");
+      }
 
       addTurn(db, sessionId, nextTurnNumber(db, sessionId), "examiner", reply, now());
 
@@ -113,7 +124,12 @@ export function sessionsRouter(
       if (userTurnNumber !== undefined) {
         deleteTurn(db, sessionId, userTurnNumber);
       }
-      res.status(500).json({ error: "Gagal memanggil penguji AI" });
+      res.status(500).json({
+        error:
+          (err as Error).message === "empty reply from provider"
+            ? "Penguji tidak memberi jawaban — coba kirim ulang"
+            : "Gagal memanggil penguji AI",
+      });
     }
   });
 
@@ -154,18 +170,36 @@ export function sessionsRouter(
       const system = buildAssessmentSystem();
       const user = buildAssessmentUser(doc.full_text, formatTranscript(getTurns(db, sessionId)));
 
+      // Every attempt is billed, so each one is recorded — including the one
+      // whose output failed to parse.
+      const attempt = async () => {
+        const out = await provider.generate(system, user, ASSESSMENT_MAX_TOKENS);
+        recordUsage(db, now(), cfg.provider, cfg.model, "assessment", out.usage);
+        if (out.truncated) throw new Error(TRUNCATED);
+        return parseAssessment(out.text);
+      };
+
       let assessment: Assessment;
       try {
-        assessment = parseAssessment((await provider.generate(system, user, 1536)).text);
-      } catch {
-        assessment = parseAssessment((await provider.generate(system, user, 1536)).text);
+        assessment = await attempt();
+      } catch (e) {
+        // A truncated answer is deterministic: the retry would cost the same
+        // and fail the same way. Only a garbled-but-complete answer is worth
+        // a second try.
+        if ((e as Error).message === TRUNCATED) throw e;
+        assessment = await attempt();
       }
 
       closeWithAssessment(db, sessionId, now(), JSON.stringify(assessment));
       res.json({ assessment });
     } catch (err) {
       console.error("[close error]", (err as Error).message);
-      res.status(500).json({ error: "Gagal menilai sidang, coba lagi" });
+      res.status(500).json({
+        error:
+          (err as Error).message === TRUNCATED
+            ? "Penilaian terpotong — model kehabisan token output sebelum selesai. Coba model lain di Pengaturan."
+            : "Gagal menilai sidang, coba lagi",
+      });
     }
   });
 

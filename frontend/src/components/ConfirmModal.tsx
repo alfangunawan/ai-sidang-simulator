@@ -23,7 +23,7 @@ export function ConfirmModal({
       <div className="modal">
         <h3>{title}</h3>
         <p>{message}</p>
-        <div style={{ display: "flex", gap: ".5rem", justifyContent: "flex-end" }}>
+        <div className="modal-actions">
           <button onClick={onCancel}>{cancelLabel}</button>
           <button className="primary" onClick={onConfirm}>
             {confirmLabel}

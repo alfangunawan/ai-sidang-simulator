@@ -70,26 +70,43 @@ export function useSpeechSynthesis(provider: string = "browser") {
 
       // Server-side provider (google / openai).
       setPreparing(true);
+      let clip: { audio: string; mime: string };
       try {
-        const { audio, mime } = await ttsSpeak(text);
-        const el = new Audio(`data:${mime};base64,${audio}`);
-        audioRef.current = el;
-        el.onplay = () => {
-          setSpeaking(true);
-          setPreparing(false);
-        };
-        el.onended = () => setSpeaking(false);
-        el.onerror = () => {
-          setSpeaking(false);
-          setPreparing(false);
-          setError("Audio gagal diputar.");
-        };
-        await el.play();
-      } catch {
-        // Surface the failure (no silent drop) but never block the chat.
+        clip = await ttsSpeak(text);
+      } catch (e) {
+        // Synthesis itself failed — report what the server actually said
+        // instead of always blaming the API key.
         setPreparing(false);
         setSpeaking(false);
-        setError("Suara gagal disiapkan — cek API key / kuota TTS di Pengaturan.");
+        setError(`Suara gagal disiapkan — ${(e as Error).message}`);
+        return;
+      }
+
+      const el = new Audio(`data:${clip.mime};base64,${clip.audio}`);
+      audioRef.current = el;
+      el.onplay = () => {
+        setSpeaking(true);
+        setPreparing(false);
+      };
+      el.onended = () => setSpeaking(false);
+      el.onerror = () => {
+        setSpeaking(false);
+        setPreparing(false);
+        setError("Audio gagal diputar.");
+      };
+      try {
+        await el.play();
+      } catch (e) {
+        setPreparing(false);
+        setSpeaking(false);
+        // A play() rejection is a browser/playback problem, never a TTS key
+        // problem: autoplay policy blocks it, or a newer reply interrupted it.
+        if ((e as Error)?.name === "AbortError") return;
+        setError(
+          (e as Error)?.name === "NotAllowedError"
+            ? "Browser memblokir pemutaran otomatis — klik halaman ini sekali, lalu suara akan berjalan."
+            : "Audio gagal diputar.",
+        );
       }
     },
     [browserSupported, stopAll],

@@ -22,6 +22,19 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS usage_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   filename TEXT NOT NULL,

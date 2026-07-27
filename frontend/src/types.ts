@@ -18,6 +18,21 @@ export interface SettingsView {
   tts_voice: string;
   has_google_tts_key: boolean;
   has_openai_tts_key: boolean;
+  stt_provider: string;
+  has_openai_stt_key: boolean;
+}
+export interface UsageTotals {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number;
+  calls: number;
+}
+export interface UsageView {
+  total: UsageTotals;
+  by_kind: { kind: string; totals: UsageTotals }[];
+  since: string | null;
 }
 export interface TtsVoice {
   name: string;

@@ -20,8 +20,9 @@ export async function googleSynth(
   });
 
   if (!res.ok) {
-    // Never include the API key in the error.
-    throw new Error(`Google TTS request failed (${res.status})`);
+    // Never include the API key in the error — it only ever travels in the
+    // query string, so the response body is safe to surface.
+    throw new Error(`Google TTS request failed (${res.status})${await reason(res)}`);
   }
 
   const data = (await res.json()) as { audioContent?: string };
@@ -43,6 +44,24 @@ export async function googleVoices(apiKey: string): Promise<TtsVoice[]> {
     gender: v.ssmlGender,
     type: voiceType(v.name),
   }));
+}
+
+// Google's own explanation for a failed call ("API key not valid", quota, …),
+// so the UI can say why instead of guessing. Empty when the body is unusable.
+async function reason(res: { text?: () => Promise<string> }): Promise<string> {
+  try {
+    const raw = (await res.text?.()) ?? "";
+    if (!raw) return "";
+    let message = raw;
+    try {
+      message = JSON.parse(raw)?.error?.message ?? raw;
+    } catch {
+      // not JSON — fall back to the raw body
+    }
+    return `: ${message.slice(0, 200)}`;
+  } catch {
+    return "";
+  }
 }
 
 // id-ID-Chirp3-HD-Kore -> "Chirp3-HD"; id-ID-Neural2-A -> "Neural2"

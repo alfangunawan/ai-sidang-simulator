@@ -38,6 +38,8 @@ beforeEach(() => {
     tts_voice: "",
     has_google_tts_key: false,
     has_openai_tts_key: false,
+    stt_provider: "browser",
+    has_openai_stt_key: false,
   };
   vi.spyOn(api, "createSession").mockResolvedValue("sess-1");
   vi.spyOn(api, "getTurns").mockResolvedValue([]);
@@ -106,8 +108,11 @@ describe("SessionPage", () => {
     );
   });
 
-  it("opens the close modal when the examiner proposes closing", async () => {
-    vi.spyOn(api, "postTurn").mockResolvedValue({ reply: "Baik.", propose_close: true });
+  it("offers closing as a banner, never a modal that covers the examiner's last reply", async () => {
+    vi.spyOn(api, "postTurn").mockResolvedValue({
+      reply: "Rekap kelemahan utama: metodologi.",
+      propose_close: true,
+    });
     render(<SessionPage onClosed={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
@@ -117,9 +122,14 @@ describe("SessionPage", () => {
     fireEvent.click(screen.getByText("Kirim"));
 
     await waitFor(() => expect(screen.getByText("Lanjut bertanya")).toBeTruthy());
+    expect(screen.getByText(/Rekap kelemahan utama/)).toBeTruthy();
+    expect(screen.queryByText("Akhiri sidang?")).toBeNull(); // no modal yet
+
+    fireEvent.click(screen.getByText("Lihat hasil penilaian"));
+    await waitFor(() => expect(screen.getByText("Akhiri sidang?")).toBeTruthy());
   });
 
-  it("declining an AI proposal calls continueSession and keeps the session", async () => {
+  it("declining an AI proposal calls continueSession and drops the banner", async () => {
     vi.spyOn(api, "postTurn").mockResolvedValue({ reply: "Baik.", propose_close: true });
     const cont = vi.spyOn(api, "continueSession").mockResolvedValue();
     render(<SessionPage onClosed={vi.fn()} />);
@@ -130,6 +140,7 @@ describe("SessionPage", () => {
 
     fireEvent.click(screen.getByText("Lanjut bertanya"));
     await waitFor(() => expect(cont).toHaveBeenCalledWith("sess-1"));
+    expect(screen.queryByText("Lanjut bertanya")).toBeNull();
   });
 
   it("Akhiri Sidang → confirm closes and calls onClosed with the assessment", async () => {

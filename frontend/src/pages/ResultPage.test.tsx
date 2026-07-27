@@ -25,6 +25,25 @@ describe("ResultPage", () => {
     expect(screen.getByText("Perkuat bab 3")).toBeTruthy();
   });
 
+  it("exports through the print dialog under a dated document title, then restores it", () => {
+    const original = document.title;
+    let titleWhilePrinting = "";
+    const print = vi.fn(() => {
+      // The document title is what the browser offers as the PDF filename.
+      titleWhilePrinting = document.title;
+      window.dispatchEvent(new Event("afterprint"));
+    });
+    vi.stubGlobal("print", print);
+
+    render(<ResultPage assessment={A} onNewSession={() => {}} onBack={() => {}} />);
+    fireEvent.click(screen.getByText(/Export PDF/));
+
+    expect(print).toHaveBeenCalledOnce();
+    expect(titleWhilePrinting).toMatch(/Penilaian Sidang/);
+    expect(document.title).toBe(original);
+    vi.unstubAllGlobals();
+  });
+
   it("wires the action buttons", () => {
     const onNewSession = vi.fn();
     const onBack = vi.fn();

@@ -91,6 +91,28 @@ describe("settings routes", () => {
     expect(res.body.ok).toBe(false);
   });
 
+  it("GET /usage starts empty and DELETE /usage clears it", async () => {
+    const { app: a, db } = app();
+    const empty = await request(a).get("/settings/usage");
+    expect(empty.status).toBe(200);
+    expect(empty.body.total.calls).toBe(0);
+    expect(empty.body.since).toBeNull();
+
+    db.prepare(
+      `INSERT INTO usage_events
+         (created_at, provider, model, kind, input_tokens, output_tokens,
+          cache_read_tokens, cache_write_tokens, cost_usd)
+       VALUES ('2026-01-01T00:00:00Z', 'openrouter', 'x/y', 'turn', 3000, 120, 0, 0, 0.004)`,
+    ).run();
+
+    const filled = await request(a).get("/settings/usage");
+    expect(filled.body.total.input_tokens).toBe(3000);
+    expect(filled.body.by_kind[0].kind).toBe("turn");
+
+    const cleared = await request(a).delete("/settings/usage");
+    expect(cleared.body.total.calls).toBe(0);
+  });
+
   it("POST stores a TTS provider, voice, and an encrypted Google key without leaking it", async () => {
     const { app: a, db } = app();
     const res = await request(a).post("/settings").send({

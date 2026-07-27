@@ -35,7 +35,14 @@ describe("ClaudeProvider", () => {
 
     // reply extracted from text blocks
     expect(result.reply).toBe("Pertanyaan penguji.");
-    expect(result.usage?.cache_read_input_tokens).toBe(100);
+    // Anthropic's cache_read_input_tokens is normalized to cache_read_tokens.
+    expect(result.usage).toEqual({
+      input_tokens: 10,
+      output_tokens: 5,
+      cache_read_tokens: 100,
+      cache_write_tokens: 0,
+      cost_usd: 0,
+    });
 
     const req = capture.req;
     expect(req.model).toBe("claude-sonnet-5");

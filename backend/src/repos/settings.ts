@@ -16,6 +16,7 @@ const DEFAULTS: Record<string, string> = {
   examiner_type: DEFAULT_EXAMINER_TYPE,
   tts_provider: "browser",
   tts_voice: "",
+  stt_provider: "browser",
 };
 
 // Maps a TTS provider to the settings key holding its (encrypted) API key.
@@ -57,6 +58,8 @@ export function getSettingsView(db: Database.Database): {
   tts_voice: string;
   has_google_tts_key: boolean;
   has_openai_tts_key: boolean;
+  stt_provider: string;
+  has_openai_stt_key: boolean;
 } {
   return {
     provider: getSetting(db, "provider") ?? DEFAULTS.provider,
@@ -77,6 +80,8 @@ export function getSettingsView(db: Database.Database): {
     tts_voice: getSetting(db, "tts_voice") ?? DEFAULTS.tts_voice,
     has_google_tts_key: getSetting(db, "google_tts_key") !== null,
     has_openai_tts_key: getSetting(db, "openai_tts_key") !== null,
+    stt_provider: getSetting(db, "stt_provider") ?? DEFAULTS.stt_provider,
+    has_openai_stt_key: getSetting(db, "openai_stt_key") !== null,
   };
 }
 
@@ -94,6 +99,8 @@ export function saveSettings(
     tts_voice?: string;
     google_tts_key?: string;
     openai_tts_key?: string;
+    stt_provider?: string;
+    openai_stt_key?: string;
   },
 ): void {
   if (body.provider !== undefined) setSetting(db, "provider", body.provider);
@@ -116,6 +123,10 @@ export function saveSettings(
   if (body.openai_tts_key !== undefined && body.openai_tts_key !== "") {
     setSetting(db, "openai_tts_key", encrypt(body.openai_tts_key, key));
   }
+  if (body.stt_provider !== undefined) setSetting(db, "stt_provider", body.stt_provider);
+  if (body.openai_stt_key !== undefined && body.openai_stt_key !== "") {
+    setSetting(db, "openai_stt_key", encrypt(body.openai_stt_key, key));
+  }
 }
 
 // Decrypted LLM API key, or null when unset.
@@ -133,6 +144,13 @@ export function getTtsKey(
   const name = ttsKeyName(provider);
   if (!name) return null;
   const enc = getSetting(db, name);
+  return enc ? decrypt(enc, key) : null;
+}
+
+// Decrypted API key for the server-side speech-to-text provider. Deliberately
+// separate from the TTS key: the two can be different OpenAI accounts.
+export function getSttKey(db: Database.Database, key: Buffer): string | null {
+  const enc = getSetting(db, "openai_stt_key");
   return enc ? decrypt(enc, key) : null;
 }
 

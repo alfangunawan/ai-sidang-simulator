@@ -7,6 +7,7 @@ import type {
   TtsAudio,
   TestResult,
   Assessment,
+  UsageView,
 } from "./types.js";
 
 function postJson(url: string, body: unknown): Promise<Response> {
@@ -84,6 +85,14 @@ export async function getSettings(): Promise<SettingsView> {
   return jsonOrThrow(await fetch("/api/settings"));
 }
 
+export async function getUsage(): Promise<UsageView> {
+  return jsonOrThrow(await fetch("/api/settings/usage"));
+}
+
+export async function resetUsage(): Promise<UsageView> {
+  return jsonOrThrow(await fetch("/api/settings/usage", { method: "DELETE" }));
+}
+
 export async function saveSettings(body: {
   provider?: string;
   api_key?: string;
@@ -131,6 +140,21 @@ export async function testTts(body: {
   key?: string;
 }): Promise<TestResult> {
   return jsonOrThrow(await postJson("/api/tts/test", body));
+}
+
+export async function testStt(body: {
+  provider?: string;
+  key?: string;
+}): Promise<TestResult> {
+  return jsonOrThrow(await postJson("/api/stt/test", body));
+}
+
+// Uploads one recorded answer and returns what the server-side model heard.
+export async function sttTranscribe(audio: Blob, filename: string): Promise<string> {
+  const form = new FormData();
+  form.append("audio", audio, filename);
+  const res = await fetch("/api/stt/transcribe", { method: "POST", body: form });
+  return (await jsonOrThrow(res)).text ?? "";
 }
 
 export async function ttsPreview(body: {

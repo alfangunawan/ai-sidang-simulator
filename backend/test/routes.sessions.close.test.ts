@@ -6,6 +6,7 @@ import { buildApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
 import { saveSettings } from "../src/repos/settings.js";
 import { replaceDocument } from "../src/repos/documents.js";
+import { ASSESSMENT_MAX_TOKENS } from "../src/providers/types.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -38,6 +39,30 @@ function stubOnce(contents: string[]) {
   );
   vi.stubGlobal("fetch", fn as any);
   return fn;
+}
+
+// Like stubOnce, but each reply carries its own finish_reason and every request
+// body is captured so a test can assert what was actually asked of the model.
+function stubWithFinish(replies: { content: string; finish_reason?: string }[]) {
+  const sent: any[] = [];
+  let i = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, init: any) => {
+      sent.push(JSON.parse(init.body));
+      const r = replies[Math.min(i++, replies.length - 1)];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            { message: { content: r.content }, finish_reason: r.finish_reason ?? "stop" },
+          ],
+        }),
+      };
+    }) as any,
+  );
+  return sent;
 }
 
 describe("close/continue/result routes", () => {
@@ -83,6 +108,30 @@ describe("close/continue/result routes", () => {
     const result = await request(app).get(`/sessions/${id}/result`);
     expect(result.body.status).toBe("active");
     expect(result.body.assessment).toBeNull();
+  });
+
+  it("asks for enough output tokens to cover a reasoning model's thinking", async () => {
+    const sent = stubWithFinish([{ content: ASSESSMENT_JSON }]);
+    const app = ready();
+    const id = (await request(app).post("/sessions").send({})).body.session_id;
+
+    const closed = await request(app).post(`/sessions/${id}/close`).send({});
+    expect(closed.status).toBe(200);
+    expect(sent[0].max_tokens).toBe(ASSESSMENT_MAX_TOKENS);
+    // Reasoning tokens are billed inside the completion budget; 1536 starved it.
+    expect(ASSESSMENT_MAX_TOKENS).toBeGreaterThanOrEqual(8000);
+  });
+
+  it("reports a truncated answer instead of paying for the same failing call twice", async () => {
+    // Reasoning model burned the whole budget: no text, cut off at the ceiling.
+    const sent = stubWithFinish([{ content: "", finish_reason: "length" }]);
+    const app = ready();
+    const id = (await request(app).post("/sessions").send({})).body.session_id;
+
+    const closed = await request(app).post(`/sessions/${id}/close`).send({});
+    expect(closed.status).toBe(500);
+    expect(closed.body.error).toMatch(/token/i);
+    expect(sent).toHaveLength(1); // a retry would fail identically and bill again
   });
 
   it("continue records the decline and returns ok", async () => {
