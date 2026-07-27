@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { getSetting, getActiveConfig, getActiveTtsConfig, getSttKey, getPersona } from "./repos/settings.js";
+import { getSetting, getActiveConfig, getActiveTtsConfig, getPersona } from "./repos/settings.js";
 import { getMembership } from "./repos/collab.js";
 
 type Cap = "ai" | "tts" | "stt";
