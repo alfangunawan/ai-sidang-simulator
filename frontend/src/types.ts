@@ -1,3 +1,4 @@
+export interface User { id: number; username: string; }
 export type Role = "examiner" | "user";
 export interface Turn { role: Role; content: string; }
 export interface ExaminerMode {
