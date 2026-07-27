@@ -3,12 +3,14 @@ import type { Turn } from "../providers/types.js";
 
 export function createSession(
   db: Database.Database,
+  userId: number,
   id: string,
   createdAt: string,
   label: string | null,
 ): void {
-  db.prepare("INSERT INTO sessions (id, created_at, label) VALUES (?,?,?)").run(
+  db.prepare("INSERT INTO sessions (id, user_id, created_at, label) VALUES (?,?,?,?)").run(
     id,
+    userId,
     createdAt,
     label,
   );
@@ -25,7 +27,7 @@ export interface SessionSummary {
 
 // Sessions that have at least one turn, newest first, with their turn count.
 // The inner JOIN excludes empty (auto-created) sessions.
-export function listSessions(db: Database.Database): SessionSummary[] {
+export function listSessions(db: Database.Database, userId: number): SessionSummary[] {
   return db
     .prepare(
       `SELECT s.id, s.created_at, s.label, s.status,
@@ -33,15 +35,17 @@ export function listSessions(db: Database.Database): SessionSummary[] {
               COUNT(t.id) AS turn_count
        FROM sessions s
        JOIN turns t ON t.session_id = s.id
+       WHERE s.user_id = ?
        GROUP BY s.id, s.created_at, s.label, s.status
        ORDER BY s.created_at DESC`,
     )
-    .all() as SessionSummary[];
+    .all(userId) as SessionSummary[];
 }
 
-export function sessionExists(db: Database.Database, sessionId: string): boolean {
+export function sessionExists(db: Database.Database, sessionId: string, userId: number): boolean {
   return (
-    db.prepare("SELECT 1 FROM sessions WHERE id = ?").get(sessionId) !== undefined
+    db.prepare("SELECT 1 FROM sessions WHERE id = ? AND user_id = ?").get(sessionId, userId) !==
+    undefined
   );
 }
 
@@ -73,8 +77,8 @@ export function addTurn(
   ).run(sessionId, turnNumber, role, content, createdAt);
 }
 
-export function deleteSession(db: Database.Database, sessionId: string): void {
-  db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+export function deleteSession(db: Database.Database, sessionId: string, userId: number): void {
+  db.prepare("DELETE FROM sessions WHERE id = ? AND user_id = ?").run(sessionId, userId);
 }
 
 export function deleteTurn(
@@ -102,12 +106,16 @@ export interface SessionMeta {
   close_declined_turn: number | null;
 }
 
-export function getSessionMeta(db: Database.Database, sessionId: string): SessionMeta | null {
+export function getSessionMeta(
+  db: Database.Database,
+  sessionId: string,
+  userId: number,
+): SessionMeta | null {
   const row = db
     .prepare(
-      "SELECT status, closed_at, assessment, close_declined_turn FROM sessions WHERE id = ?",
+      "SELECT status, closed_at, assessment, close_declined_turn FROM sessions WHERE id = ? AND user_id = ?",
     )
-    .get(sessionId) as SessionMeta | undefined;
+    .get(sessionId, userId) as SessionMeta | undefined;
   return row ?? null;
 }
 
