@@ -73,8 +73,11 @@ export default function App() {
           <button
             className="ghost"
             onClick={async () => {
-              await logout();
-              setUser(null);
+              try {
+                await logout();
+              } finally {
+                setUser(null);
+              }
             }}
           >
             Keluar
