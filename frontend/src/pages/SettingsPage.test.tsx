@@ -50,6 +50,7 @@ beforeEach(() => {
     by_kind: [],
     since: null,
   });
+  vi.spyOn(api, "getCollab").mockResolvedValue({ hosting: null, joined: null });
 });
 afterEach(() => vi.restoreAllMocks());
 

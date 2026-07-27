@@ -109,8 +109,8 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
         setMode(s.examiner_mode);
         setTypes(s.examiner_types ?? []);
         setType(s.examiner_type ?? "umum");
-        setTtsProvider(s.tts_provider);
-        setSttProvider(s.stt_provider ?? "browser");
+        setTtsProvider(s.effective_tts_provider ?? s.tts_provider);
+        setSttProvider(s.effective_stt_provider ?? s.stt_provider ?? "browser");
       })
       .catch(() => {});
   }, []);

@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import type Database from "better-sqlite3";
 import { getSetting, getSttKey } from "../repos/settings.js";
+import { resolveSttSource } from "../effectiveConfig.js";
 import { whisperTranscribe, whisperCheckAuth } from "../providers/stt/whisper.js";
 
 // A single spoken answer, held in memory only — recordings are never stored.
@@ -15,7 +16,8 @@ export function sttRouter(db: Database.Database, key: Buffer): Router {
 
   r.post("/transcribe", upload.single("audio"), async (req, res) => {
     const userId = req.userId!;
-    const provider = getSetting(db, userId, "stt_provider") ?? "browser";
+    const src = resolveSttSource(db, userId);
+    const provider = getSetting(db, src, "stt_provider") ?? "browser";
     if (provider !== "whisper") {
       return res
         .status(400)
@@ -24,7 +26,7 @@ export function sttRouter(db: Database.Database, key: Buffer): Router {
     if (!req.file?.buffer?.length) {
       return res.status(400).json({ error: "Rekaman audio kosong" });
     }
-    const apiKey = getSttKey(db, userId, key);
+    const apiKey = getSttKey(db, src, key);
     if (!apiKey) return res.status(400).json({ error: "API key STT belum diisi" });
 
     try {

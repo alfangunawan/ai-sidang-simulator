@@ -21,6 +21,26 @@ export interface SettingsView {
   has_openai_tts_key: boolean;
   stt_provider: string;
   has_openai_stt_key: boolean;
+  effective_ai_shared?: boolean;
+  effective_tts_shared?: boolean;
+  effective_stt_shared?: boolean;
+  effective_tts_provider?: string;
+  effective_tts_voice?: string;
+  effective_stt_provider?: string;
+}
+export interface CollabMember { member_user_id: number; username: string; joined_at: string; }
+export interface CollabShares { share_ai: number; share_tts: number; share_stt: number; }
+export interface CollabState {
+  hosting: {
+    invite_code: string;
+    shares: CollabShares;
+    members: CollabMember[];
+    usage: {
+      total: { calls: number; cost_usd?: number };
+      by_member: { member_user_id: number; username: string; totals: { calls: number; cost_usd?: number } }[];
+    };
+  } | null;
+  joined: { host_username: string; shares: CollabShares } | null;
 }
 export interface UsageTotals {
   input_tokens: number;

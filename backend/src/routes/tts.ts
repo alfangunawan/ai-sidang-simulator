@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
-import { getActiveTtsConfig, getTtsKey, getSetting } from "../repos/settings.js";
+import { getTtsKey, getSetting } from "../repos/settings.js";
+import { getEffectiveTtsConfig } from "../effectiveConfig.js";
 import {
   synthesize,
   googleVoices,
@@ -29,7 +30,7 @@ export function ttsRouter(db: Database.Database, key: Buffer): Router {
     const text = (req.body?.text ?? "").toString();
     if (!text.trim()) return res.status(400).json({ error: "Teks kosong" });
     try {
-      const cfg = getActiveTtsConfig(db, userId, key);
+      const cfg = getEffectiveTtsConfig(db, userId, key);
       res.json(await synthesize(cfg, text));
     } catch (e) {
       // Missing key/voice or synth failure → 400, so the chat never 500s on audio.

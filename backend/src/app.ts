@@ -7,6 +7,7 @@ import { sessionsRouter } from "./routes/sessions.js";
 import { skripsiRouter } from "./routes/skripsi.js";
 import { ttsRouter } from "./routes/tts.js";
 import { sttRouter } from "./routes/stt.js";
+import { collabRouter } from "./routes/collab.js";
 
 export function buildApp(db: Database.Database, key: Buffer): express.Express {
   const app = express();
@@ -26,6 +27,7 @@ export function buildApp(db: Database.Database, key: Buffer): express.Express {
   app.use("/skripsi", auth, skripsiRouter(db));
   app.use("/tts", auth, ttsRouter(db, key));
   app.use("/stt", auth, sttRouter(db, key));
+  app.use("/collab", auth, collabRouter(db));
 
   app.use(
     (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

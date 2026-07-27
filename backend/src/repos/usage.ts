@@ -44,6 +44,7 @@ const SUMS = `
 export function recordUsage(
   db: Database.Database,
   userId: number,
+  keyOwnerUserId: number,
   at: string,
   provider: string,
   model: string,
@@ -54,11 +55,12 @@ export function recordUsage(
   try {
     db.prepare(
       `INSERT INTO usage_events
-         (user_id, created_at, provider, model, kind, input_tokens, output_tokens,
+         (user_id, key_owner_user_id, created_at, provider, model, kind, input_tokens, output_tokens,
           cache_read_tokens, cache_write_tokens, cost_usd)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       userId,
+      keyOwnerUserId,
       at,
       provider,
       model,
@@ -91,6 +93,20 @@ export function getUsageView(db: Database.Database, userId: number): UsageView {
     by_kind: rows.map(({ kind, ...totals }) => ({ kind, totals })),
     since: since?.since ?? null,
   };
+}
+
+export function getKeyUsageView(db: Database.Database, hostUserId: number): {
+  total: UsageTotals;
+  by_member: { member_user_id: number; username: string; totals: UsageTotals }[];
+} {
+  const total = (db.prepare(`SELECT ${SUMS} FROM usage_events WHERE key_owner_user_id = ? AND user_id != ?`).get(hostUserId, hostUserId) as UsageTotals) ?? EMPTY;
+  const rows = db.prepare(
+    `SELECT e.user_id AS member_user_id, u.username, ${SUMS}
+     FROM usage_events e JOIN users u ON u.id = e.user_id
+     WHERE e.key_owner_user_id = ? AND e.user_id != ?
+     GROUP BY e.user_id ORDER BY u.username ASC`,
+  ).all(hostUserId, hostUserId) as (UsageTotals & { member_user_id: number; username: string })[];
+  return { total, by_member: rows.map(({ member_user_id, username, ...totals }) => ({ member_user_id, username, totals })) };
 }
 
 export function resetUsage(db: Database.Database, userId: number): void {
