@@ -58,3 +58,20 @@ describe("sessions lifecycle columns", () => {
     expect(row.status).toBe("active");
   });
 });
+
+describe("schema", () => {
+  it("creates auth tables and user_id columns", () => {
+    const db = openDb(":memory:");
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map((t) => t.name);
+    expect(tables).toEqual(expect.arrayContaining(["users", "auth_tokens", "user_settings"]));
+
+    function cols(table: string): string[] {
+      return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    }
+
+    expect(cols("sessions")).toContain("user_id");
+    expect(cols("documents")).toContain("user_id");
+    expect(cols("usage_events")).toContain("user_id");
+    expect(cols("users")).toEqual(expect.arrayContaining(["id", "username", "password_hash", "created_at"]));
+  });
+});

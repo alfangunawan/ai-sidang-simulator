@@ -42,6 +42,29 @@ CREATE TABLE IF NOT EXISTS documents (
   char_count INTEGER NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (user_id, key),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 `;
 
 function addColumnIfMissing(
@@ -64,5 +87,8 @@ export function openDb(path: string): Database.Database {
   addColumnIfMissing(db, "sessions", "closed_at", "closed_at TEXT");
   addColumnIfMissing(db, "sessions", "assessment", "assessment TEXT");
   addColumnIfMissing(db, "sessions", "close_declined_turn", "close_declined_turn INTEGER");
+  addColumnIfMissing(db, "sessions", "user_id", "user_id INTEGER");
+  addColumnIfMissing(db, "documents", "user_id", "user_id INTEGER");
+  addColumnIfMissing(db, "usage_events", "user_id", "user_id INTEGER");
   return db;
 }
