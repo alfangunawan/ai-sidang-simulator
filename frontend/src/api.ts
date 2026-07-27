@@ -8,6 +8,7 @@ import type {
   TestResult,
   Assessment,
   UsageView,
+  User,
 } from "./types.js";
 
 function postJson(url: string, body: unknown): Promise<Response> {
@@ -18,9 +19,15 @@ function postJson(url: string, body: unknown): Promise<Response> {
   });
 }
 
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: () => void): void {
+  onUnauthorized = fn;
+}
+
 async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401) onUnauthorized?.();
     const serverError = (data as any)?.error;
     if (typeof serverError === "string") throw new Error(serverError);
     // No JSON `{error}` body → not the backend's own error (e.g. the Vite dev
@@ -177,4 +184,22 @@ export async function uploadSkripsi(file: File): Promise<SkripsiInfo> {
 
 export async function deleteSkripsi(): Promise<void> {
   await jsonOrThrow(await fetch("/api/skripsi", { method: "DELETE" }));
+}
+
+export async function me(): Promise<User | null> {
+  const res = await fetch("/api/auth/me");
+  if (res.status === 401) return null;
+  return (await jsonOrThrow(res)).user as User;
+}
+
+export async function login(username: string, password: string): Promise<User> {
+  return (await jsonOrThrow(await postJson("/api/auth/login", { username, password }))).user as User;
+}
+
+export async function register(username: string, password: string): Promise<User> {
+  return (await jsonOrThrow(await postJson("/api/auth/register", { username, password }))).user as User;
+}
+
+export async function logout(): Promise<void> {
+  await postJson("/api/auth/logout", {});
 }

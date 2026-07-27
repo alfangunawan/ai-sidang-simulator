@@ -7,15 +7,20 @@ import { getSetting } from "../src/repos/settings.js";
 
 afterEach(() => vi.restoreAllMocks());
 
-function app() {
+async function app() {
   const db = openDb(":memory:");
-  return { app: buildApp(db, randomBytes(32)), db };
+  const a = buildApp(db, randomBytes(32));
+  const agent = request.agent(a);
+  const { body } = await agent
+    .post("/auth/register")
+    .send({ username: "tester", password: "password1" });
+  return { agent, db, userId: body.user.id };
 }
 
 describe("settings routes", () => {
   it("GET returns defaults with has_api_key false and no raw key", async () => {
-    const { app: a } = app();
-    const res = await request(a).get("/settings");
+    const { agent } = await app();
+    const res = await agent.get("/settings");
     expect(res.status).toBe(200);
     expect(res.body.provider).toBe("claude");
     expect(res.body.model).toBe("claude-sonnet-5");
@@ -24,8 +29,8 @@ describe("settings routes", () => {
   });
 
   it("POST stores an encrypted key, never returns it, and flips has_api_key", async () => {
-    const { app: a, db } = app();
-    const res = await request(a)
+    const { agent, db, userId } = await app();
+    const res = await agent
       .post("/settings")
       .send({ provider: "openrouter", model: "x/y", api_key: "or-SECRET" });
     expect(res.status).toBe(200);
@@ -33,22 +38,22 @@ describe("settings routes", () => {
     expect(res.body.provider).toBe("openrouter");
     expect(JSON.stringify(res.body)).not.toContain("or-SECRET");
     // stored value is ciphertext, not plaintext
-    const stored = getSetting(db, "api_key");
+    const stored = getSetting(db, userId, "api_key");
     expect(stored).not.toBeNull();
     expect(stored).not.toContain("or-SECRET");
   });
 
   it("POST without api_key preserves the existing key", async () => {
-    const { app: a } = app();
-    await request(a).post("/settings").send({ api_key: "keep-me" });
-    const res = await request(a).post("/settings").send({ model: "claude-opus-4-8" });
+    const { agent } = await app();
+    await agent.post("/settings").send({ api_key: "keep-me" });
+    const res = await agent.post("/settings").send({ model: "claude-opus-4-8" });
     expect(res.body.has_api_key).toBe(true);
     expect(res.body.model).toBe("claude-opus-4-8");
   });
 
   it("GET returns TTS defaults (browser, no keys)", async () => {
-    const { app: a } = app();
-    const res = await request(a).get("/settings");
+    const { agent } = await app();
+    const res = await agent.get("/settings");
     expect(res.body.tts_provider).toBe("browser");
     expect(res.body.tts_voice).toBe("");
     expect(res.body.has_google_tts_key).toBe(false);
@@ -65,8 +70,8 @@ describe("settings routes", () => {
         return { ok: true, status: 200 } as any;
       }),
     );
-    const { app: a } = app();
-    const res = await request(a)
+    const { agent } = await app();
+    const res = await agent
       .post("/settings/test-llm")
       .send({ provider: "openrouter", model: "x/y", api_key: "typed-key" });
     expect(res.body).toEqual({ ok: true });
@@ -74,8 +79,8 @@ describe("settings routes", () => {
   });
 
   it("POST /test-llm reports a missing key", async () => {
-    const { app: a } = app();
-    const res = await request(a)
+    const { agent } = await app();
+    const res = await agent
       .post("/settings/test-llm")
       .send({ provider: "openrouter", model: "x/y" });
     expect(res.body.ok).toBe(false);
@@ -84,38 +89,38 @@ describe("settings routes", () => {
 
   it("POST /test-llm reports failure on a bad key", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 401 })) as any);
-    const { app: a } = app();
-    const res = await request(a)
+    const { agent } = await app();
+    const res = await agent
       .post("/settings/test-llm")
       .send({ provider: "openrouter", model: "x/y", api_key: "bad" });
     expect(res.body.ok).toBe(false);
   });
 
   it("GET /usage starts empty and DELETE /usage clears it", async () => {
-    const { app: a, db } = app();
-    const empty = await request(a).get("/settings/usage");
+    const { agent, db, userId } = await app();
+    const empty = await agent.get("/settings/usage");
     expect(empty.status).toBe(200);
     expect(empty.body.total.calls).toBe(0);
     expect(empty.body.since).toBeNull();
 
     db.prepare(
       `INSERT INTO usage_events
-         (created_at, provider, model, kind, input_tokens, output_tokens,
+         (user_id, created_at, provider, model, kind, input_tokens, output_tokens,
           cache_read_tokens, cache_write_tokens, cost_usd)
-       VALUES ('2026-01-01T00:00:00Z', 'openrouter', 'x/y', 'turn', 3000, 120, 0, 0, 0.004)`,
-    ).run();
+       VALUES (?, '2026-01-01T00:00:00Z', 'openrouter', 'x/y', 'turn', 3000, 120, 0, 0, 0.004)`,
+    ).run(userId);
 
-    const filled = await request(a).get("/settings/usage");
+    const filled = await agent.get("/settings/usage");
     expect(filled.body.total.input_tokens).toBe(3000);
     expect(filled.body.by_kind[0].kind).toBe("turn");
 
-    const cleared = await request(a).delete("/settings/usage");
+    const cleared = await agent.delete("/settings/usage");
     expect(cleared.body.total.calls).toBe(0);
   });
 
   it("POST stores a TTS provider, voice, and an encrypted Google key without leaking it", async () => {
-    const { app: a, db } = app();
-    const res = await request(a).post("/settings").send({
+    const { agent, db, userId } = await app();
+    const res = await agent.post("/settings").send({
       tts_provider: "google",
       tts_voice: "id-ID-Chirp3-HD-Kore",
       google_tts_key: "gcp-SECRET",
@@ -125,6 +130,6 @@ describe("settings routes", () => {
     expect(res.body.has_google_tts_key).toBe(true);
     expect(res.body.has_openai_tts_key).toBe(false);
     expect(JSON.stringify(res.body)).not.toContain("gcp-SECRET");
-    expect(getSetting(db, "google_tts_key")).not.toContain("gcp-SECRET");
+    expect(getSetting(db, userId, "google_tts_key")).not.toContain("gcp-SECRET");
   });
 });

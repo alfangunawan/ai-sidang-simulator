@@ -43,6 +43,7 @@ const SUMS = `
  */
 export function recordUsage(
   db: Database.Database,
+  userId: number,
   at: string,
   provider: string,
   model: string,
@@ -53,10 +54,11 @@ export function recordUsage(
   try {
     db.prepare(
       `INSERT INTO usage_events
-         (created_at, provider, model, kind, input_tokens, output_tokens,
+         (user_id, created_at, provider, model, kind, input_tokens, output_tokens,
           cache_read_tokens, cache_write_tokens, cost_usd)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
+      userId,
       at,
       provider,
       model,
@@ -72,17 +74,17 @@ export function recordUsage(
   }
 }
 
-export function getUsageView(db: Database.Database): UsageView {
+export function getUsageView(db: Database.Database, userId: number): UsageView {
   const total =
-    (db.prepare(`SELECT ${SUMS} FROM usage_events`).get() as UsageTotals) ?? EMPTY;
+    (db.prepare(`SELECT ${SUMS} FROM usage_events WHERE user_id = ?`).get(userId) as UsageTotals) ?? EMPTY;
 
   const rows = db
-    .prepare(`SELECT kind, ${SUMS} FROM usage_events GROUP BY kind ORDER BY kind`)
-    .all() as (UsageTotals & { kind: UsageKind })[];
+    .prepare(`SELECT kind, ${SUMS} FROM usage_events WHERE user_id = ? GROUP BY kind ORDER BY kind`)
+    .all(userId) as (UsageTotals & { kind: UsageKind })[];
 
   const since = db
-    .prepare("SELECT MIN(created_at) AS since FROM usage_events")
-    .get() as { since: string | null };
+    .prepare("SELECT MIN(created_at) AS since FROM usage_events WHERE user_id = ?")
+    .get(userId) as { since: string | null };
 
   return {
     total,
@@ -91,6 +93,6 @@ export function getUsageView(db: Database.Database): UsageView {
   };
 }
 
-export function resetUsage(db: Database.Database): void {
-  db.prepare("DELETE FROM usage_events").run();
+export function resetUsage(db: Database.Database, userId: number): void {
+  db.prepare("DELETE FROM usage_events WHERE user_id = ?").run(userId);
 }

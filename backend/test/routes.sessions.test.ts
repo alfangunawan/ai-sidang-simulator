@@ -8,18 +8,25 @@ import { replaceDocument } from "../src/repos/documents.js";
 
 afterEach(() => vi.restoreAllMocks());
 
-function ready() {
+async function ready() {
   const db = openDb(":memory:");
   const key = randomBytes(32);
+  const app = buildApp(db, key);
+  const agent = request.agent(app);
+  const { body } = await agent
+    .post("/auth/register")
+    .send({ username: "tester", password: "password1" });
+  const userId = body.user.id;
   // configure openrouter so the turn goes through global fetch (easy to stub)
-  saveSettings(db, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
-  replaceDocument(db, "thesis.pdf", "ISI SKRIPSI LENGKAP", "2026-01-01T00:00:00Z");
-  return buildApp(db, key);
+  saveSettings(db, userId, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
+  replaceDocument(db, userId, "thesis.pdf", "ISI SKRIPSI LENGKAP", "2026-01-01T00:00:00Z");
+  return agent;
 }
 
 describe("sessions routes", () => {
   it("creates a session and returns a session_id", async () => {
-    const res = await request(ready()).post("/sessions").send({});
+    const agent = await ready();
+    const res = await agent.post("/sessions").send({});
     expect(res.status).toBe(200);
     expect(typeof res.body.session_id).toBe("string");
     expect(res.body.session_id.length).toBeGreaterThan(0);
@@ -34,17 +41,17 @@ describe("sessions routes", () => {
         json: async () => ({ choices: [{ message: { content: "Pertanyaan penguji?" } }] }),
       })) as any,
     );
-    const app = ready();
-    const created = await request(app).post("/sessions").send({});
+    const agent = await ready();
+    const created = await agent.post("/sessions").send({});
     const id = created.body.session_id;
 
-    const turn = await request(app)
+    const turn = await agent
       .post(`/sessions/${id}/turn`)
       .send({ transcript: "Ini jawaban saya." });
     expect(turn.status).toBe(200);
     expect(turn.body.reply).toBe("Pertanyaan penguji?");
 
-    const turns = await request(app).get(`/sessions/${id}/turns`);
+    const turns = await agent.get(`/sessions/${id}/turns`);
     expect(turns.body.turns).toEqual([
       { role: "user", content: "Ini jawaban saya." },
       { role: "examiner", content: "Pertanyaan penguji?" },
@@ -54,10 +61,14 @@ describe("sessions routes", () => {
   it("400s a turn when no API key is set", async () => {
     const db = openDb(":memory:");
     const key = randomBytes(32);
-    replaceDocument(db, "t.pdf", "isi", "2026-01-01T00:00:00Z");
     const app = buildApp(db, key);
-    const created = await request(app).post("/sessions").send({});
-    const res = await request(app)
+    const agent = request.agent(app);
+    const { body } = await agent
+      .post("/auth/register")
+      .send({ username: "tester", password: "password1" });
+    replaceDocument(db, body.user.id, "t.pdf", "isi", "2026-01-01T00:00:00Z");
+    const created = await agent.post("/sessions").send({});
+    const res = await agent
       .post(`/sessions/${created.body.session_id}/turn`)
       .send({ transcript: "halo" });
     expect(res.status).toBe(400);
@@ -67,10 +78,14 @@ describe("sessions routes", () => {
   it("400s a turn when no document is uploaded", async () => {
     const db = openDb(":memory:");
     const key = randomBytes(32);
-    saveSettings(db, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
     const app = buildApp(db, key);
-    const created = await request(app).post("/sessions").send({});
-    const res = await request(app)
+    const agent = request.agent(app);
+    const { body } = await agent
+      .post("/auth/register")
+      .send({ username: "tester", password: "password1" });
+    saveSettings(db, body.user.id, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
+    const created = await agent.post("/sessions").send({});
+    const res = await agent
       .post(`/sessions/${created.body.session_id}/turn`)
       .send({ transcript: "halo" });
     expect(res.status).toBe(400);
@@ -86,17 +101,17 @@ describe("sessions routes", () => {
         text: async () => "err",
       })) as any,
     );
-    const app = ready();
-    const created = await request(app).post("/sessions").send({});
+    const agent = await ready();
+    const created = await agent.post("/sessions").send({});
     const id = created.body.session_id;
 
-    const turn = await request(app)
+    const turn = await agent
       .post(`/sessions/${id}/turn`)
       .send({ transcript: "Ini jawaban saya." });
     expect(turn.status).toBe(500);
     expect(turn.body.error).toBeTruthy();
 
-    const turns = await request(app).get(`/sessions/${id}/turns`);
+    const turns = await agent.get(`/sessions/${id}/turns`);
     expect(turns.body.turns).toEqual([]);
   });
 
@@ -109,13 +124,13 @@ describe("sessions routes", () => {
         json: async () => ({ choices: [{ message: { content: "q" } }] }),
       })) as any,
     );
-    const app = ready();
-    const created = await request(app).post("/sessions").send({});
-    await request(app)
+    const agent = await ready();
+    const created = await agent.post("/sessions").send({});
+    await agent
       .post(`/sessions/${created.body.session_id}/turn`)
       .send({ transcript: "halo" });
 
-    const res = await request(app).get("/sessions");
+    const res = await agent.get("/sessions");
     expect(res.status).toBe(200);
     expect(res.body.sessions).toHaveLength(1);
     expect(res.body.sessions[0].id).toBe(created.body.session_id);
@@ -123,8 +138,8 @@ describe("sessions routes", () => {
   });
 
   it("404s a turn for an unknown session", async () => {
-    const app = ready();
-    const res = await request(app)
+    const agent = await ready();
+    const res = await agent
       .post("/sessions/does-not-exist/turn")
       .send({ transcript: "halo" });
     expect(res.status).toBe(404);
@@ -139,15 +154,15 @@ describe("sessions routes", () => {
         json: async () => ({ choices: [{ message: { content: "q" } }] }),
       })) as any,
     );
-    const app = ready();
-    const created = await request(app).post("/sessions").send({});
+    const agent = await ready();
+    const created = await agent.post("/sessions").send({});
     const id = created.body.session_id;
-    await request(app).post(`/sessions/${id}/turn`).send({ transcript: "hi" });
+    await agent.post(`/sessions/${id}/turn`).send({ transcript: "hi" });
 
-    const del = await request(app).delete(`/sessions/${id}`);
+    const del = await agent.delete(`/sessions/${id}`);
     expect(del.body).toEqual({ ok: true });
 
-    const turns = await request(app).get(`/sessions/${id}/turns`);
-    expect(turns.body.turns).toEqual([]);
+    const turns = await agent.get(`/sessions/${id}/turns`);
+    expect(turns.status).toBe(404); // deleted session is no longer owned
   });
 });

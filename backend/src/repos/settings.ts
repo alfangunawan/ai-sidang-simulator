@@ -26,26 +26,35 @@ function ttsKeyName(provider: string): string | null {
   return null;
 }
 
-export function getSetting(db: Database.Database, key: string): string | null {
-  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
-    | { value: string }
-    | undefined;
+export function getSetting(db: Database.Database, userId: number, key: string): string | null {
+  const row = db
+    .prepare("SELECT value FROM user_settings WHERE user_id = ? AND key = ?")
+    .get(userId, key) as { value: string } | undefined;
   return row ? row.value : null;
 }
 
-export function setSetting(db: Database.Database, key: string, value: string): void {
+export function setSetting(
+  db: Database.Database,
+  userId: number,
+  key: string,
+  value: string,
+): void {
   db.prepare(
-    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-  ).run(key, value);
+    "INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) " +
+      "ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+  ).run(userId, key, value);
 }
 
-export function seedDefaults(db: Database.Database): void {
+export function seedDefaults(db: Database.Database, userId: number): void {
   for (const [k, v] of Object.entries(DEFAULTS)) {
-    if (getSetting(db, k) === null) setSetting(db, k, v);
+    if (getSetting(db, userId, k) === null) setSetting(db, userId, k, v);
   }
 }
 
-export function getSettingsView(db: Database.Database): {
+export function getSettingsView(
+  db: Database.Database,
+  userId: number,
+): {
   provider: string;
   model: string;
   has_api_key: boolean;
@@ -62,31 +71,32 @@ export function getSettingsView(db: Database.Database): {
   has_openai_stt_key: boolean;
 } {
   return {
-    provider: getSetting(db, "provider") ?? DEFAULTS.provider,
-    model: getSetting(db, "model") ?? DEFAULTS.model,
-    has_api_key: getSetting(db, "api_key") !== null,
-    attack_points: getSetting(db, "attack_points") ?? DEFAULTS.attack_points,
-    examiner_mode: getSetting(db, "examiner_mode") ?? DEFAULTS.examiner_mode,
+    provider: getSetting(db, userId, "provider") ?? DEFAULTS.provider,
+    model: getSetting(db, userId, "model") ?? DEFAULTS.model,
+    has_api_key: getSetting(db, userId, "api_key") !== null,
+    attack_points: getSetting(db, userId, "attack_points") ?? DEFAULTS.attack_points,
+    examiner_mode: getSetting(db, userId, "examiner_mode") ?? DEFAULTS.examiner_mode,
     examiner_modes: Object.entries(EXAMINER_MODES).map(([value, m]) => ({
       value,
       label: m.label,
     })),
-    examiner_type: getSetting(db, "examiner_type") ?? DEFAULTS.examiner_type,
+    examiner_type: getSetting(db, userId, "examiner_type") ?? DEFAULTS.examiner_type,
     examiner_types: Object.entries(EXAMINER_TYPES).map(([value, t]) => ({
       value,
       label: t.label,
     })),
-    tts_provider: getSetting(db, "tts_provider") ?? DEFAULTS.tts_provider,
-    tts_voice: getSetting(db, "tts_voice") ?? DEFAULTS.tts_voice,
-    has_google_tts_key: getSetting(db, "google_tts_key") !== null,
-    has_openai_tts_key: getSetting(db, "openai_tts_key") !== null,
-    stt_provider: getSetting(db, "stt_provider") ?? DEFAULTS.stt_provider,
-    has_openai_stt_key: getSetting(db, "openai_stt_key") !== null,
+    tts_provider: getSetting(db, userId, "tts_provider") ?? DEFAULTS.tts_provider,
+    tts_voice: getSetting(db, userId, "tts_voice") ?? DEFAULTS.tts_voice,
+    has_google_tts_key: getSetting(db, userId, "google_tts_key") !== null,
+    has_openai_tts_key: getSetting(db, userId, "openai_tts_key") !== null,
+    stt_provider: getSetting(db, userId, "stt_provider") ?? DEFAULTS.stt_provider,
+    has_openai_stt_key: getSetting(db, userId, "openai_stt_key") !== null,
   };
 }
 
 export function saveSettings(
   db: Database.Database,
+  userId: number,
   key: Buffer,
   body: {
     provider?: string;
@@ -103,54 +113,56 @@ export function saveSettings(
     openai_stt_key?: string;
   },
 ): void {
-  if (body.provider !== undefined) setSetting(db, "provider", body.provider);
-  if (body.model !== undefined) setSetting(db, "model", body.model);
+  if (body.provider !== undefined) setSetting(db, userId, "provider", body.provider);
+  if (body.model !== undefined) setSetting(db, userId, "model", body.model);
   if (body.attack_points !== undefined)
-    setSetting(db, "attack_points", body.attack_points);
+    setSetting(db, userId, "attack_points", body.attack_points);
   if (body.examiner_mode !== undefined)
-    setSetting(db, "examiner_mode", body.examiner_mode);
+    setSetting(db, userId, "examiner_mode", body.examiner_mode);
   if (body.examiner_type !== undefined)
-    setSetting(db, "examiner_type", body.examiner_type);
+    setSetting(db, userId, "examiner_type", body.examiner_type);
   if (body.api_key !== undefined && body.api_key !== "") {
-    setSetting(db, "api_key", encrypt(body.api_key, key));
+    setSetting(db, userId, "api_key", encrypt(body.api_key, key));
   }
   if (body.tts_provider !== undefined)
-    setSetting(db, "tts_provider", body.tts_provider);
-  if (body.tts_voice !== undefined) setSetting(db, "tts_voice", body.tts_voice);
+    setSetting(db, userId, "tts_provider", body.tts_provider);
+  if (body.tts_voice !== undefined) setSetting(db, userId, "tts_voice", body.tts_voice);
   if (body.google_tts_key !== undefined && body.google_tts_key !== "") {
-    setSetting(db, "google_tts_key", encrypt(body.google_tts_key, key));
+    setSetting(db, userId, "google_tts_key", encrypt(body.google_tts_key, key));
   }
   if (body.openai_tts_key !== undefined && body.openai_tts_key !== "") {
-    setSetting(db, "openai_tts_key", encrypt(body.openai_tts_key, key));
+    setSetting(db, userId, "openai_tts_key", encrypt(body.openai_tts_key, key));
   }
-  if (body.stt_provider !== undefined) setSetting(db, "stt_provider", body.stt_provider);
+  if (body.stt_provider !== undefined)
+    setSetting(db, userId, "stt_provider", body.stt_provider);
   if (body.openai_stt_key !== undefined && body.openai_stt_key !== "") {
-    setSetting(db, "openai_stt_key", encrypt(body.openai_stt_key, key));
+    setSetting(db, userId, "openai_stt_key", encrypt(body.openai_stt_key, key));
   }
 }
 
 // Decrypted LLM API key, or null when unset.
-export function getLlmKey(db: Database.Database, key: Buffer): string | null {
-  const enc = getSetting(db, "api_key");
+export function getLlmKey(db: Database.Database, userId: number, key: Buffer): string | null {
+  const enc = getSetting(db, userId, "api_key");
   return enc ? decrypt(enc, key) : null;
 }
 
 // Decrypted API key for a TTS provider, or null when unset / not applicable.
 export function getTtsKey(
   db: Database.Database,
+  userId: number,
   key: Buffer,
   provider: string,
 ): string | null {
   const name = ttsKeyName(provider);
   if (!name) return null;
-  const enc = getSetting(db, name);
+  const enc = getSetting(db, userId, name);
   return enc ? decrypt(enc, key) : null;
 }
 
 // Decrypted API key for the server-side speech-to-text provider. Deliberately
 // separate from the TTS key: the two can be different OpenAI accounts.
-export function getSttKey(db: Database.Database, key: Buffer): string | null {
-  const enc = getSetting(db, "openai_stt_key");
+export function getSttKey(db: Database.Database, userId: number, key: Buffer): string | null {
+  const enc = getSetting(db, userId, "openai_stt_key");
   return enc ? decrypt(enc, key) : null;
 }
 
@@ -158,21 +170,23 @@ export function getSttKey(db: Database.Database, key: Buffer): string | null {
 // client-side) or when the selected provider is missing its key or voice.
 export function getActiveTtsConfig(
   db: Database.Database,
+  userId: number,
   key: Buffer,
 ): { provider: string; voice: string; apiKey: string } {
-  const provider = getSetting(db, "tts_provider") ?? DEFAULTS.tts_provider;
+  const provider = getSetting(db, userId, "tts_provider") ?? DEFAULTS.tts_provider;
   if (provider === "browser") {
     throw new Error("Provider TTS browser tidak menggunakan server");
   }
-  const apiKey = getTtsKey(db, key, provider);
+  const apiKey = getTtsKey(db, userId, key, provider);
   if (!apiKey) throw new Error(`API key TTS ${provider} belum diset`);
-  const voice = getSetting(db, "tts_voice") ?? "";
+  const voice = getSetting(db, userId, "tts_voice") ?? "";
   if (!voice) throw new Error("Voice TTS belum dipilih");
   return { provider, voice, apiKey };
 }
 
 export function getActiveConfig(
   db: Database.Database,
+  userId: number,
   key: Buffer,
 ): {
   provider: string;
@@ -182,14 +196,14 @@ export function getActiveConfig(
   examinerMode: string;
   examinerType: string;
 } {
-  const enc = getSetting(db, "api_key");
+  const enc = getSetting(db, userId, "api_key");
   if (!enc) throw new Error("API key belum diset");
   return {
-    provider: getSetting(db, "provider") ?? DEFAULTS.provider,
-    model: getSetting(db, "model") ?? DEFAULTS.model,
+    provider: getSetting(db, userId, "provider") ?? DEFAULTS.provider,
+    model: getSetting(db, userId, "model") ?? DEFAULTS.model,
     apiKey: decrypt(enc, key),
-    attackPoints: getSetting(db, "attack_points") ?? DEFAULTS.attack_points,
-    examinerMode: getSetting(db, "examiner_mode") ?? DEFAULTS.examiner_mode,
-    examinerType: getSetting(db, "examiner_type") ?? DEFAULTS.examiner_type,
+    attackPoints: getSetting(db, userId, "attack_points") ?? DEFAULTS.attack_points,
+    examinerMode: getSetting(db, userId, "examiner_mode") ?? DEFAULTS.examiner_mode,
+    examinerType: getSetting(db, userId, "examiner_type") ?? DEFAULTS.examiner_type,
   };
 }

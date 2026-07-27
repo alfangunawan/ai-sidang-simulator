@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SessionPage, SESSION_KEY } from "./pages/SessionPage.js";
 import { SettingsPage } from "./pages/SettingsPage.js";
 import { HistoryPage } from "./pages/HistoryPage.js";
 import { ResultPage } from "./pages/ResultPage.js";
-import { getResult } from "./api.js";
-import type { Assessment } from "./types.js";
+import { AuthPage } from "./pages/AuthPage.js";
+import { getResult, me, logout, setUnauthorizedHandler } from "./api.js";
+import type { Assessment, User } from "./types.js";
 
 const TABS: { key: "session" | "history" | "settings"; label: string }[] = [
   { key: "session", label: "Latihan" },
@@ -15,6 +16,13 @@ const TABS: { key: "session" | "history" | "settings"; label: string }[] = [
 export default function App() {
   const [view, setView] = useState<"session" | "history" | "settings" | "result">("session");
   const [result, setResult] = useState<Assessment | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null));
+    me().then(setUser).catch(() => setUser(null)).finally(() => setReady(true));
+  }, []);
 
   function showResult(a: Assessment) {
     setResult(a);
@@ -35,6 +43,9 @@ export default function App() {
 
   // The result view lives under the Riwayat tab, so the pill stays lit there.
   const activeTab = view === "result" ? "history" : view;
+
+  if (!ready) return <div className="app" />;
+  if (!user) return <AuthPage onAuthed={setUser} />;
 
   return (
     <div className="app">
@@ -58,6 +69,19 @@ export default function App() {
               </button>
             ))}
           </nav>
+          <span className="whoami">{user.username}</span>
+          <button
+            className="ghost"
+            onClick={async () => {
+              try {
+                await logout();
+              } finally {
+                setUser(null);
+              }
+            }}
+          >
+            Keluar
+          </button>
         </div>
       </header>
 

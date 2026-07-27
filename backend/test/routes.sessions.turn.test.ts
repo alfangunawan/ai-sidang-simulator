@@ -11,12 +11,18 @@ import { getTurns } from "../src/repos/sessions.js";
 
 afterEach(() => vi.restoreAllMocks());
 
-function ready() {
+async function ready() {
   const db = openDb(":memory:");
   const key = randomBytes(32);
-  saveSettings(db, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
-  replaceDocument(db, "thesis.pdf", "ISI SKRIPSI", "2026-01-01T00:00:00Z");
-  return { app: buildApp(db, key), db };
+  const app = buildApp(db, key);
+  const agent = request.agent(app);
+  const { body } = await agent
+    .post("/auth/register")
+    .send({ username: "tester", password: "password1" });
+  const userId = body.user.id;
+  saveSettings(db, userId, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
+  replaceDocument(db, userId, "thesis.pdf", "ISI SKRIPSI", "2026-01-01T00:00:00Z");
+  return { agent, db };
 }
 
 function stubReply(content: string) {
@@ -33,10 +39,10 @@ function stubReply(content: string) {
 describe("turn route — marker + close guard", () => {
   it("strips the close marker from the reply and does not propose below the floor", async () => {
     stubReply(`Baik.\n${CLOSE_MARKER}`);
-    const { app } = ready();
-    const id = (await request(app).post("/sessions").send({})).body.session_id;
+    const { agent } = await ready();
+    const id = (await agent.post("/sessions").send({})).body.session_id;
 
-    const turn = await request(app).post(`/sessions/${id}/turn`).send({ transcript: "jawab" });
+    const turn = await agent.post(`/sessions/${id}/turn`).send({ transcript: "jawab" });
     expect(turn.status).toBe(200);
     expect(turn.body.reply).toBe("Baik.");
     expect(turn.body.propose_close).toBe(false); // only 1 examiner turn < floor
@@ -56,14 +62,14 @@ describe("turn route — marker + close guard", () => {
         };
       }) as any,
     );
-    const { app, db } = ready();
-    const id = (await request(app).post("/sessions").send({})).body.session_id;
+    const { agent, db } = await ready();
+    const id = (await agent.post("/sessions").send({})).body.session_id;
 
-    await request(app).post(`/sessions/${id}/turn`).send({ transcript: "Lalu" });
+    await agent.post(`/sessions/${id}/turn`).send({ transcript: "Lalu" });
     expect(sent[0]).toContain(NON_ANSWER_NUDGE);
     expect(getTurns(db, id)[0]).toEqual({ role: "user", content: "Lalu" });
 
-    await request(app)
+    await agent
       .post(`/sessions/${id}/turn`)
       .send({ transcript: "Skor SUS saya 78 dari 20 responden." });
     expect(sent[1]).toBe("Skor SUS saya 78 dari 20 responden.");
@@ -71,10 +77,10 @@ describe("turn route — marker + close guard", () => {
 
   it("rejects an empty reply and rolls back the student turn", async () => {
     stubReply("   "); // reasoning model burned its budget before writing text
-    const { app, db } = ready();
-    const id = (await request(app).post("/sessions").send({})).body.session_id;
+    const { agent, db } = await ready();
+    const id = (await agent.post("/sessions").send({})).body.session_id;
 
-    const turn = await request(app).post(`/sessions/${id}/turn`).send({ transcript: "jawab" });
+    const turn = await agent.post(`/sessions/${id}/turn`).send({ transcript: "jawab" });
     expect(turn.status).toBe(500);
     expect(turn.body.error).toMatch(/tidak memberi jawaban/);
     expect(getTurns(db, id)).toEqual([]); // no empty bubble, no orphan user turn
@@ -82,12 +88,12 @@ describe("turn route — marker + close guard", () => {
 
   it("409s a turn on a closed session", async () => {
     stubReply("Pertanyaan?");
-    const { app, db } = ready();
-    const id = (await request(app).post("/sessions").send({})).body.session_id;
-    await request(app).post(`/sessions/${id}/turn`).send({ transcript: "hi" });
+    const { agent, db } = await ready();
+    const id = (await agent.post("/sessions").send({})).body.session_id;
+    await agent.post(`/sessions/${id}/turn`).send({ transcript: "hi" });
     closeWithAssessment(db, id, "2026-01-02T00:00:00Z", '{"final_score":80}');
 
-    const turn = await request(app).post(`/sessions/${id}/turn`).send({ transcript: "lagi" });
+    const turn = await agent.post(`/sessions/${id}/turn`).send({ transcript: "lagi" });
     expect(turn.status).toBe(409);
   });
 });

@@ -12,11 +12,13 @@ import { getUsageView, resetUsage } from "../repos/usage.js";
 export function settingsRouter(db: Database.Database, key: Buffer): Router {
   const r = Router();
 
-  r.get("/", (_req, res) => {
-    res.json(getSettingsView(db));
+  r.get("/", (req, res) => {
+    const userId = req.userId!;
+    res.json(getSettingsView(db, userId));
   });
 
   r.post("/", (req, res) => {
+    const userId = req.userId!;
     const body = req.body ?? {};
     const fields = [
       "provider",
@@ -37,29 +39,32 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
         return res.status(400).json({ error: "Field harus berupa string" });
       }
     }
-    saveSettings(db, key, body);
-    res.json(getSettingsView(db));
+    saveSettings(db, userId, key, body);
+    res.json(getSettingsView(db, userId));
   });
 
-  r.get("/usage", (_req, res) => {
-    res.json(getUsageView(db));
+  r.get("/usage", (req, res) => {
+    const userId = req.userId!;
+    res.json(getUsageView(db, userId));
   });
 
-  r.delete("/usage", (_req, res) => {
-    resetUsage(db);
-    res.json(getUsageView(db));
+  r.delete("/usage", (req, res) => {
+    const userId = req.userId!;
+    resetUsage(db, userId);
+    res.json(getUsageView(db, userId));
   });
 
   // Auth/connection check for the LLM provider. Uses the typed key if provided,
   // else the saved one. Always 200; the result is in `ok`.
   r.post("/test-llm", async (req, res) => {
+    const userId = req.userId!;
     const body = req.body ?? {};
-    const provider = (body.provider as string) ?? getSetting(db, "provider") ?? "claude";
-    const model = (body.model as string) ?? getSetting(db, "model") ?? "";
+    const provider = (body.provider as string) ?? getSetting(db, userId, "provider") ?? "claude";
+    const model = (body.model as string) ?? getSetting(db, userId, "model") ?? "";
     const apiKey =
       typeof body.api_key === "string" && body.api_key
         ? body.api_key
-        : getLlmKey(db, key);
+        : getLlmKey(db, userId, key);
     if (!apiKey) {
       return res.json({ ok: false, error: "API key belum diisi" });
     }

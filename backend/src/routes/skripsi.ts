@@ -17,6 +17,7 @@ export function skripsiRouter(
   const r = Router();
 
   r.post("/", upload.single("file"), async (req, res) => {
+    const userId = req.userId!;
     if (!req.file) return res.status(400).json({ error: "File PDF wajib diunggah" });
     try {
       const pdf = await getDocumentProxy(new Uint8Array(req.file.buffer));
@@ -28,7 +29,7 @@ export function skripsiRouter(
           .json({ error: "Tidak ada teks yang bisa diekstrak dari PDF ini" });
       }
       const createdAt = now();
-      replaceDocument(db, req.file.originalname, fullText, createdAt);
+      replaceDocument(db, userId, req.file.originalname, fullText, createdAt);
       res.json({
         filename: req.file.originalname,
         char_count: fullText.length,
@@ -39,8 +40,9 @@ export function skripsiRouter(
     }
   });
 
-  r.get("/", (_req, res) => {
-    const doc = getActiveDocument(db);
+  r.get("/", (req, res) => {
+    const userId = req.userId!;
+    const doc = getActiveDocument(db, userId);
     if (!doc) return res.json(null);
     res.json({
       filename: doc.filename,
@@ -49,8 +51,9 @@ export function skripsiRouter(
     });
   });
 
-  r.delete("/", (_req, res) => {
-    deleteDocument(db);
+  r.delete("/", (req, res) => {
+    const userId = req.userId!;
+    deleteDocument(db, userId);
     res.json({ ok: true });
   });
 

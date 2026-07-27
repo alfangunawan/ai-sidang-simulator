@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import type Database from "better-sqlite3";
-import { seedDefaults } from "./repos/settings.js";
+import { authRouter, requireAuth } from "./routes/auth.js";
 import { settingsRouter } from "./routes/settings.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { skripsiRouter } from "./routes/skripsi.js";
@@ -9,21 +9,23 @@ import { ttsRouter } from "./routes/tts.js";
 import { sttRouter } from "./routes/stt.js";
 
 export function buildApp(db: Database.Database, key: Buffer): express.Express {
-  seedDefaults(db);
-
   const app = express();
-  app.use(cors({ origin: "http://localhost:5173" }));
+  app.set("trust proxy", 1);
+  app.use(cors({ origin: "http://localhost:5173", credentials: true }));
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true });
   });
 
-  app.use("/settings", settingsRouter(db, key));
-  app.use("/sessions", sessionsRouter(db, key));
-  app.use("/skripsi", skripsiRouter(db));
-  app.use("/tts", ttsRouter(db, key));
-  app.use("/stt", sttRouter(db, key));
+  app.use("/auth", authRouter(db));
+
+  const auth = requireAuth(db);
+  app.use("/settings", auth, settingsRouter(db, key));
+  app.use("/sessions", auth, sessionsRouter(db, key));
+  app.use("/skripsi", auth, skripsiRouter(db));
+  app.use("/tts", auth, ttsRouter(db, key));
+  app.use("/stt", auth, sttRouter(db, key));
 
   app.use(
     (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -7,11 +7,16 @@ import { saveSettings } from "../src/repos/settings.js";
 
 afterEach(() => vi.restoreAllMocks());
 
-function appWith(settings: Parameters<typeof saveSettings>[2]) {
+async function appWith(settings: Parameters<typeof saveSettings>[3]) {
   const db = openDb(":memory:");
   const key = randomBytes(32);
-  saveSettings(db, key, settings);
-  return buildApp(db, key);
+  const app = buildApp(db, key);
+  const agent = request.agent(app);
+  const { body } = await agent
+    .post("/auth/register")
+    .send({ username: "tester", password: "password1" });
+  saveSettings(db, body.user.id, key, settings);
+  return agent;
 }
 
 const WHISPER = { stt_provider: "whisper", openai_stt_key: "sk-stt" };
@@ -27,7 +32,7 @@ describe("POST /stt/transcribe", () => {
       }) as any,
     );
 
-    const res = await request(appWith(WHISPER))
+    const res = await (await appWith(WHISPER))
       .post("/stt/transcribe")
       .attach("audio", Buffer.from("fake-audio"), "answer.webm");
 
@@ -40,12 +45,12 @@ describe("POST /stt/transcribe", () => {
   });
 
   it("400s when no audio was uploaded", async () => {
-    const res = await request(appWith(WHISPER)).post("/stt/transcribe").send();
+    const res = await (await appWith(WHISPER)).post("/stt/transcribe").send();
     expect(res.status).toBe(400);
   });
 
   it("400s when the STT key is missing", async () => {
-    const res = await request(appWith({ stt_provider: "whisper" }))
+    const res = await (await appWith({ stt_provider: "whisper" }))
       .post("/stt/transcribe")
       .attach("audio", Buffer.from("x"), "a.webm");
     expect(res.status).toBe(400);
@@ -53,7 +58,7 @@ describe("POST /stt/transcribe", () => {
   });
 
   it("400s for the browser provider — that one never reaches the server", async () => {
-    const res = await request(appWith({ stt_provider: "browser" }))
+    const res = await (await appWith({ stt_provider: "browser" }))
       .post("/stt/transcribe")
       .attach("audio", Buffer.from("x"), "a.webm");
     expect(res.status).toBe(400);
@@ -64,7 +69,7 @@ describe("POST /stt/transcribe", () => {
       "fetch",
       vi.fn(async () => ({ ok: false, status: 401, text: async () => "bad key" })) as any,
     );
-    const res = await request(appWith(WHISPER))
+    const res = await (await appWith(WHISPER))
       .post("/stt/transcribe")
       .attach("audio", Buffer.from("x"), "a.webm");
     expect(res.status).toBe(400);
@@ -74,18 +79,18 @@ describe("POST /stt/transcribe", () => {
 
 describe("POST /stt/test", () => {
   it("browser provider is always ok (no key)", async () => {
-    const res = await request(appWith({})).post("/stt/test").send({ provider: "browser" });
+    const res = await (await appWith({})).post("/stt/test").send({ provider: "browser" });
     expect(res.body).toEqual({ ok: true });
   });
 
   it("whisper ok when the key authenticates", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200 })) as any);
-    const res = await request(appWith(WHISPER)).post("/stt/test").send({});
+    const res = await (await appWith(WHISPER)).post("/stt/test").send({});
     expect(res.body).toEqual({ ok: true });
   });
 
   it("reports a missing key", async () => {
-    const res = await request(appWith({ stt_provider: "whisper" })).post("/stt/test").send({});
+    const res = await (await appWith({ stt_provider: "whisper" })).post("/stt/test").send({});
     expect(res.body.ok).toBe(false);
     expect(res.body.error).toMatch(/key/i);
   });
@@ -99,7 +104,7 @@ describe("POST /stt/test", () => {
         return { ok: true, status: 200 };
       }) as any,
     );
-    await request(appWith(WHISPER)).post("/stt/test").send({ key: "sk-typed" });
+    await (await appWith(WHISPER)).post("/stt/test").send({ key: "sk-typed" });
     expect(seen[0]).toBe("Bearer sk-typed");
   });
 });
