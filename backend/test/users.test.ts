@@ -20,6 +20,8 @@ describe("users repo", () => {
     createToken(db, "tok", uid, "2026-07-27T00:00:00.000Z", "2026-08-26T00:00:00.000Z");
     expect(getUserIdByToken(db, "tok", "2026-08-01T00:00:00.000Z")).toBe(uid);
     expect(getUserIdByToken(db, "tok", "2026-09-01T00:00:00.000Z")).toBeNull(); // expired
+    createToken(db, "tok2", uid, "2026-07-27T00:00:00.000Z", "2026-08-15T00:00:00.000Z");
+    expect(getUserIdByToken(db, "tok2", "2026-08-15T00:00:00.000Z")).toBeNull(); // expires exactly at now → expired
     deleteToken(db, "tok");
     expect(getUserIdByToken(db, "tok", "2026-08-01T00:00:00.000Z")).toBeNull();
   });
