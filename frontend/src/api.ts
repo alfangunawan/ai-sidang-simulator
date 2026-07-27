@@ -9,6 +9,7 @@ import type {
   Assessment,
   UsageView,
   User,
+  CollabState,
 } from "./types.js";
 
 function postJson(url: string, body: unknown): Promise<Response> {
@@ -202,4 +203,46 @@ export async function register(username: string, password: string): Promise<User
 
 export async function logout(): Promise<void> {
   await postJson("/api/auth/logout", {});
+}
+
+export async function getCollab(): Promise<CollabState> {
+  return jsonOrThrow(await fetch("/api/collab"));
+}
+
+export async function becomeHost(): Promise<CollabState> {
+  return jsonOrThrow(await postJson("/api/collab", {}));
+}
+
+export async function disbandCollab(): Promise<void> {
+  await jsonOrThrow(await fetch("/api/collab", { method: "DELETE" }));
+}
+
+export async function setCollabShares(shares: {
+  share_ai: boolean;
+  share_tts: boolean;
+  share_stt: boolean;
+}): Promise<CollabState> {
+  return jsonOrThrow(
+    await fetch("/api/collab/shares", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(shares),
+    }),
+  );
+}
+
+export async function regenerateCollabCode(): Promise<CollabState> {
+  return jsonOrThrow(await postJson("/api/collab/regenerate-code", {}));
+}
+
+export async function joinCollab(code: string): Promise<CollabState> {
+  return jsonOrThrow(await postJson("/api/collab/join", { code }));
+}
+
+export async function leaveCollab(): Promise<void> {
+  await jsonOrThrow(await postJson("/api/collab/leave", {}));
+}
+
+export async function kickMember(memberUserId: number): Promise<CollabState> {
+  return jsonOrThrow(await fetch(`/api/collab/members/${memberUserId}`, { method: "DELETE" }));
 }

@@ -20,6 +20,7 @@ import type {
   TestResult,
   UsageView,
 } from "../types.js";
+import { CollabSettings } from "./CollabSettings.js";
 
 const PREVIEW_SAMPLE = "Halo, ini contoh suara penguji sidang.";
 
@@ -59,6 +60,7 @@ const NAV = [
   { href: "#diktasi", label: "Suara ke teks" },
   { href: "#dokumen", label: "Dokumen skripsi" },
   { href: "#pemakaian", label: "Pemakaian token" },
+  { href: "#kolaborasi", label: "Kolaborasi" },
 ];
 
 // One chip per connection: neutral before a test, then the test's verdict.
@@ -365,6 +367,11 @@ export function SettingsPage() {
                 Key disimpan di server lokal Anda dan hanya dipakai untuk memanggil
                 provider yang dipilih.
               </p>
+              {settings?.effective_ai_shared && (
+                <p className="hint">
+                  Memakai AI dari host — key sendiri tidak dipakai selama tergabung.
+                </p>
+              )}
               {llmStatus && !llmStatus.ok && <p className="error">{llmStatus.error}</p>}
             </div>
           </section>
@@ -403,6 +410,12 @@ export function SettingsPage() {
               </div>
               {ttsProvider !== "browser" && <span className={ttsChip.cls}>{ttsChip.label}</span>}
             </div>
+
+            {settings?.effective_tts_shared && (
+              <p className="hint" style={{ marginTop: 0 }}>
+                Memakai suara dari host — key sendiri tidak dipakai selama tergabung.
+              </p>
+            )}
 
             <div className="field">
               <label>Provider Suara</label>
@@ -515,6 +528,12 @@ export function SettingsPage() {
               </div>
               {sttProvider !== "browser" && <span className={sttChip.cls}>{sttChip.label}</span>}
             </div>
+
+            {settings?.effective_stt_shared && (
+              <p className="hint" style={{ marginTop: 0 }}>
+                Memakai diktasi dari host — key sendiri tidak dipakai selama tergabung.
+              </p>
+            )}
 
             <div className="field">
               <label>Provider Diktasi</label>
@@ -679,6 +698,8 @@ export function SettingsPage() {
               </>
             )}
           </section>
+
+          <CollabSettings />
 
           {err && <p className="error">{err}</p>}
         </div>
