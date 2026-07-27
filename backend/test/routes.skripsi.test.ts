@@ -10,20 +10,24 @@ import { openDb } from "../src/db.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const samplePdf = readFileSync(join(here, "fixtures/sample.pdf"));
 
-function app() {
-  return buildApp(openDb(":memory:"), randomBytes(32));
+async function app() {
+  const a = buildApp(openDb(":memory:"), randomBytes(32));
+  const agent = request.agent(a);
+  await agent.post("/auth/register").send({ username: "tester", password: "password1" });
+  return agent;
 }
 
 describe("skripsi routes", () => {
   it("GET returns null when no document uploaded", async () => {
-    const res = await request(app()).get("/skripsi");
+    const agent = await app();
+    const res = await agent.get("/skripsi");
     expect(res.status).toBe(200);
     expect(res.body).toBeNull();
   });
 
   it("POST extracts text, stores it, and returns metadata", async () => {
-    const a = app();
-    const res = await request(a)
+    const a = await app();
+    const res = await a
       .post("/skripsi")
       .attach("file", samplePdf, "thesis.pdf");
     expect(res.status).toBe(200);
@@ -31,28 +35,29 @@ describe("skripsi routes", () => {
     expect(res.body.char_count).toBeGreaterThan(0);
     expect(typeof res.body.uploaded_at).toBe("string");
 
-    const get = await request(a).get("/skripsi");
+    const get = await a.get("/skripsi");
     expect(get.body.filename).toBe("thesis.pdf");
   });
 
   it("400s when no file is attached", async () => {
-    const res = await request(app()).post("/skripsi");
+    const agent = await app();
+    const res = await agent.post("/skripsi");
     expect(res.status).toBe(400);
   });
 
   it("re-upload replaces the previous document (<=1 row)", async () => {
-    const a = app();
-    await request(a).post("/skripsi").attach("file", samplePdf, "first.pdf");
-    await request(a).post("/skripsi").attach("file", samplePdf, "second.pdf");
-    const get = await request(a).get("/skripsi");
+    const a = await app();
+    await a.post("/skripsi").attach("file", samplePdf, "first.pdf");
+    await a.post("/skripsi").attach("file", samplePdf, "second.pdf");
+    const get = await a.get("/skripsi");
     expect(get.body.filename).toBe("second.pdf");
   });
 
   it("DELETE removes the active document", async () => {
-    const a = app();
-    await request(a).post("/skripsi").attach("file", samplePdf, "x.pdf");
-    await request(a).delete("/skripsi");
-    const get = await request(a).get("/skripsi");
+    const a = await app();
+    await a.post("/skripsi").attach("file", samplePdf, "x.pdf");
+    await a.delete("/skripsi");
+    const get = await a.get("/skripsi");
     expect(get.body).toBeNull();
   });
 });

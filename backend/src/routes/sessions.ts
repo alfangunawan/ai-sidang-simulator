@@ -42,37 +42,44 @@ export function sessionsRouter(
   const r = Router();
 
   r.post("/", (req, res) => {
+    const userId = req.userId!;
     const id = uuid();
-    createSession(db, id, now(), (req.body?.label as string) ?? null);
+    createSession(db, userId, id, now(), (req.body?.label as string) ?? null);
     res.json({ session_id: id });
   });
 
-  r.get("/", (_req, res) => {
-    res.json({ sessions: listSessions(db) });
+  r.get("/", (req, res) => {
+    const userId = req.userId!;
+    res.json({ sessions: listSessions(db, userId) });
   });
 
   r.get("/:id/turns", (req, res) => {
+    const userId = req.userId!;
+    if (!sessionExists(db, req.params.id, userId)) {
+      return res.status(404).json({ error: "Sesi tidak ditemukan" });
+    }
     res.json({ turns: getTurns(db, req.params.id) });
   });
 
   r.post("/:id/turn", async (req, res) => {
+    const userId = req.userId!;
     const sessionId = req.params.id;
     const transcript = (req.body?.transcript ?? "").toString().trim();
 
-    if (!sessionExists(db, sessionId)) {
+    if (!sessionExists(db, sessionId, userId)) {
       return res.status(404).json({ error: "Sesi tidak ditemukan" });
     }
-    const meta = getSessionMeta(db, sessionId);
+    const meta = getSessionMeta(db, sessionId, userId);
     if (meta?.status === "closed") {
       return res.status(409).json({ error: "Sidang sudah ditutup" });
     }
     if (!transcript) {
       return res.status(400).json({ error: "Transkrip kosong" });
     }
-    if (getSetting(db, "api_key") === null) {
+    if (getSetting(db, userId, "api_key") === null) {
       return res.status(400).json({ error: "Set API key di Settings dulu" });
     }
-    const doc = getActiveDocument(db);
+    const doc = getActiveDocument(db, userId);
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
@@ -83,7 +90,7 @@ export function sessionsRouter(
       userTurnNumber = nextTurnNumber(db, sessionId);
       addTurn(db, sessionId, userTurnNumber, "user", transcript, now());
 
-      const cfg = getActiveConfig(db, key);
+      const cfg = getActiveConfig(db, userId, key);
       const provider = getProvider(cfg);
       const personaAttack = buildPersona(
         cfg.examinerMode,
@@ -99,7 +106,7 @@ export function sessionsRouter(
       );
 
       // Recorded before the empty-reply guard: the call was billed either way.
-      recordUsage(db, now(), cfg.provider, cfg.model, "turn", result.usage);
+      recordUsage(db, userId, now(), cfg.provider, cfg.model, "turn", result.usage);
 
       const { reply, hasMarker } = stripCloseMarker(result.reply);
 
@@ -134,13 +141,15 @@ export function sessionsRouter(
   });
 
   r.delete("/:id", (req, res) => {
-    deleteSession(db, req.params.id);
+    const userId = req.userId!;
+    deleteSession(db, req.params.id, userId);
     res.json({ ok: true });
   });
 
   r.post("/:id/continue", (req, res) => {
+    const userId = req.userId!;
     const sessionId = req.params.id;
-    if (!sessionExists(db, sessionId)) {
+    if (!sessionExists(db, sessionId, userId)) {
       return res.status(404).json({ error: "Sesi tidak ditemukan" });
     }
     setCloseDeclined(db, sessionId, countExaminerTurns(db, sessionId));
@@ -148,24 +157,25 @@ export function sessionsRouter(
   });
 
   r.post("/:id/close", async (req, res) => {
+    const userId = req.userId!;
     const sessionId = req.params.id;
-    if (!sessionExists(db, sessionId)) {
+    if (!sessionExists(db, sessionId, userId)) {
       return res.status(404).json({ error: "Sesi tidak ditemukan" });
     }
-    const meta = getSessionMeta(db, sessionId);
+    const meta = getSessionMeta(db, sessionId, userId);
     if (meta?.status === "closed" && meta.assessment) {
       return res.json({ assessment: JSON.parse(meta.assessment) as Assessment });
     }
-    if (getSetting(db, "api_key") === null) {
+    if (getSetting(db, userId, "api_key") === null) {
       return res.status(400).json({ error: "Set API key di Settings dulu" });
     }
-    const doc = getActiveDocument(db);
+    const doc = getActiveDocument(db, userId);
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
 
     try {
-      const cfg = getActiveConfig(db, key);
+      const cfg = getActiveConfig(db, userId, key);
       const provider = getProvider(cfg);
       const system = buildAssessmentSystem();
       const user = buildAssessmentUser(doc.full_text, formatTranscript(getTurns(db, sessionId)));
@@ -174,7 +184,7 @@ export function sessionsRouter(
       // whose output failed to parse.
       const attempt = async () => {
         const out = await provider.generate(system, user, ASSESSMENT_MAX_TOKENS);
-        recordUsage(db, now(), cfg.provider, cfg.model, "assessment", out.usage);
+        recordUsage(db, userId, now(), cfg.provider, cfg.model, "assessment", out.usage);
         if (out.truncated) throw new Error(TRUNCATED);
         return parseAssessment(out.text);
       };
@@ -204,11 +214,12 @@ export function sessionsRouter(
   });
 
   r.get("/:id/result", (req, res) => {
+    const userId = req.userId!;
     const sessionId = req.params.id;
-    if (!sessionExists(db, sessionId)) {
+    if (!sessionExists(db, sessionId, userId)) {
       return res.status(404).json({ error: "Sesi tidak ditemukan" });
     }
-    const meta = getSessionMeta(db, sessionId);
+    const meta = getSessionMeta(db, sessionId, userId);
     res.json({
       status: meta?.status ?? "active",
       assessment: meta?.assessment ? (JSON.parse(meta.assessment) as Assessment) : null,

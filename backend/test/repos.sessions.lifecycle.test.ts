@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { openDb } from "../src/db.js";
+import { createUser } from "../src/repos/users.js";
 import {
   createSession,
   addTurn,
@@ -12,13 +13,14 @@ import {
 
 function seed() {
   const db = openDb(":memory:");
-  createSession(db, "s1", "2026-01-01T00:00:00Z", null);
-  return db;
+  const userId = createUser(db, "tester", "h", "2026-01-01T00:00:00Z");
+  createSession(db, userId, "s1", "2026-01-01T00:00:00Z", null);
+  return { db, userId };
 }
 
 describe("sessions lifecycle repo", () => {
   it("counts only examiner turns", () => {
-    const db = seed();
+    const { db } = seed();
     addTurn(db, "s1", 1, "user", "a", "t");
     addTurn(db, "s1", 2, "examiner", "q1", "t");
     addTurn(db, "s1", 3, "user", "b", "t");
@@ -27,32 +29,32 @@ describe("sessions lifecycle repo", () => {
   });
 
   it("defaults to active meta then records a decline", () => {
-    const db = seed();
-    expect(getSessionMeta(db, "s1")).toMatchObject({
+    const { db, userId } = seed();
+    expect(getSessionMeta(db, "s1", userId)).toMatchObject({
       status: "active",
       closed_at: null,
       assessment: null,
       close_declined_turn: null,
     });
     setCloseDeclined(db, "s1", 11);
-    expect(getSessionMeta(db, "s1")?.close_declined_turn).toBe(11);
+    expect(getSessionMeta(db, "s1", userId)?.close_declined_turn).toBe(11);
   });
 
   it("closeWithAssessment flips status and stores JSON", () => {
-    const db = seed();
+    const { db, userId } = seed();
     closeWithAssessment(db, "s1", "2026-01-02T00:00:00Z", '{"final_score":80}');
-    const meta = getSessionMeta(db, "s1");
+    const meta = getSessionMeta(db, "s1", userId);
     expect(meta?.status).toBe("closed");
     expect(meta?.closed_at).toBe("2026-01-02T00:00:00Z");
     expect(meta?.assessment).toBe('{"final_score":80}');
   });
 
   it("listSessions exposes status and final_score", () => {
-    const db = seed();
+    const { db, userId } = seed();
     addTurn(db, "s1", 1, "user", "a", "t");
     addTurn(db, "s1", 2, "examiner", "q", "t");
     closeWithAssessment(db, "s1", "2026-01-02T00:00:00Z", '{"final_score":82}');
-    const rows = listSessions(db);
+    const rows = listSessions(db, userId);
     expect(rows[0].status).toBe("closed");
     expect(rows[0].final_score).toBe(82);
   });

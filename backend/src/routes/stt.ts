@@ -14,7 +14,8 @@ export function sttRouter(db: Database.Database, key: Buffer): Router {
   const r = Router();
 
   r.post("/transcribe", upload.single("audio"), async (req, res) => {
-    const provider = getSetting(db, "stt_provider") ?? "browser";
+    const userId = req.userId!;
+    const provider = getSetting(db, userId, "stt_provider") ?? "browser";
     if (provider !== "whisper") {
       return res
         .status(400)
@@ -23,7 +24,7 @@ export function sttRouter(db: Database.Database, key: Buffer): Router {
     if (!req.file?.buffer?.length) {
       return res.status(400).json({ error: "Rekaman audio kosong" });
     }
-    const apiKey = getSttKey(db, key);
+    const apiKey = getSttKey(db, userId, key);
     if (!apiKey) return res.status(400).json({ error: "API key STT belum diisi" });
 
     try {
@@ -44,14 +45,15 @@ export function sttRouter(db: Database.Database, key: Buffer): Router {
   // Connection check for the STT provider. Uses the typed key if provided, else
   // the saved one. Always 200; the result is in `ok`.
   r.post("/test", async (req, res) => {
+    const userId = req.userId!;
     const body = req.body ?? {};
-    const provider = (body.provider as string) ?? getSetting(db, "stt_provider") ?? "browser";
+    const provider = (body.provider as string) ?? getSetting(db, userId, "stt_provider") ?? "browser";
     if (provider === "browser") return res.json({ ok: true });
     if (provider !== "whisper") {
       return res.json({ ok: false, error: `Provider STT tidak dikenal: ${provider}` });
     }
     const apiKey =
-      typeof body.key === "string" && body.key ? body.key : getSttKey(db, key);
+      typeof body.key === "string" && body.key ? body.key : getSttKey(db, userId, key);
     if (!apiKey) return res.json({ ok: false, error: "API key STT belum diisi" });
     try {
       await whisperCheckAuth(apiKey);

@@ -25,10 +25,11 @@ export function ttsRouter(db: Database.Database, key: Buffer): Router {
   const r = Router();
 
   r.post("/speak", async (req, res) => {
+    const userId = req.userId!;
     const text = (req.body?.text ?? "").toString();
     if (!text.trim()) return res.status(400).json({ error: "Teks kosong" });
     try {
-      const cfg = getActiveTtsConfig(db, key);
+      const cfg = getActiveTtsConfig(db, userId, key);
       res.json(await synthesize(cfg, text));
     } catch (e) {
       // Missing key/voice or synth failure → 400, so the chat never 500s on audio.
@@ -39,11 +40,12 @@ export function ttsRouter(db: Database.Database, key: Buffer): Router {
   // Global connection check for the TTS provider (no synthesis, no voice needed).
   // Uses the typed key if provided, else the saved one. Always 200; result in `ok`.
   r.post("/test", async (req, res) => {
+    const userId = req.userId!;
     const body = req.body ?? {};
-    const provider = (body.provider as string) ?? getSetting(db, "tts_provider") ?? "browser";
+    const provider = (body.provider as string) ?? getSetting(db, userId, "tts_provider") ?? "browser";
     if (provider === "browser") return res.json({ ok: true });
     const apiKey =
-      typeof body.key === "string" && body.key ? body.key : getTtsKey(db, key, provider);
+      typeof body.key === "string" && body.key ? body.key : getTtsKey(db, userId, key, provider);
     if (!apiKey) return res.json({ ok: false, error: "API key TTS belum diisi" });
     try {
       if (provider === "google") await googleVoices(apiKey);
@@ -57,15 +59,16 @@ export function ttsRouter(db: Database.Database, key: Buffer): Router {
 
   // Preview a specific voice: synthesize a fixed sample and return the audio.
   r.post("/preview", async (req, res) => {
+    const userId = req.userId!;
     const body = req.body ?? {};
-    const provider = (body.provider as string) ?? getSetting(db, "tts_provider") ?? "browser";
+    const provider = (body.provider as string) ?? getSetting(db, userId, "tts_provider") ?? "browser";
     const voice = (body.voice ?? "").toString();
     if (provider === "browser") {
       return res.status(400).json({ error: "Preview browser dijalankan di sisi klien" });
     }
     if (!voice) return res.status(400).json({ error: "Voice belum dipilih" });
     const apiKey =
-      typeof body.key === "string" && body.key ? body.key : getTtsKey(db, key, provider);
+      typeof body.key === "string" && body.key ? body.key : getTtsKey(db, userId, key, provider);
     if (!apiKey) return res.status(400).json({ error: "API key TTS belum diisi" });
     try {
       res.json(await synthesize({ provider, voice, apiKey }, PREVIEW_SAMPLE));
@@ -75,10 +78,11 @@ export function ttsRouter(db: Database.Database, key: Buffer): Router {
   });
 
   r.get("/voices", async (req, res) => {
+    const userId = req.userId!;
     const provider = (req.query.provider ?? "").toString();
     if (provider === "openai") return res.json({ voices: OPENAI_VOICES });
     if (provider === "google") {
-      const gkey = getTtsKey(db, key, "google");
+      const gkey = getTtsKey(db, userId, key, "google");
       if (gkey) {
         try {
           return res.json({ voices: await googleVoices(gkey) });
