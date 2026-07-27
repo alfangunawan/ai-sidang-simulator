@@ -184,6 +184,17 @@ export function getActiveTtsConfig(
   return { provider, voice, apiKey };
 }
 
+export function getPersona(
+  db: Database.Database,
+  userId: number,
+): { attackPoints: string; examinerMode: string; examinerType: string } {
+  return {
+    attackPoints: getSetting(db, userId, "attack_points") ?? DEFAULTS.attack_points,
+    examinerMode: getSetting(db, userId, "examiner_mode") ?? DEFAULTS.examiner_mode,
+    examinerType: getSetting(db, userId, "examiner_type") ?? DEFAULTS.examiner_type,
+  };
+}
+
 export function getActiveConfig(
   db: Database.Database,
   userId: number,
@@ -202,8 +213,6 @@ export function getActiveConfig(
     provider: getSetting(db, userId, "provider") ?? DEFAULTS.provider,
     model: getSetting(db, userId, "model") ?? DEFAULTS.model,
     apiKey: decrypt(enc, key),
-    attackPoints: getSetting(db, userId, "attack_points") ?? DEFAULTS.attack_points,
-    examinerMode: getSetting(db, userId, "examiner_mode") ?? DEFAULTS.examiner_mode,
-    examinerType: getSetting(db, userId, "examiner_type") ?? DEFAULTS.examiner_type,
+    ...getPersona(db, userId),
   };
 }
