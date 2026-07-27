@@ -59,4 +59,41 @@ describe("collab repo", () => {
     expect(getHostCollab(db, host)).toBeNull();
     expect(getMembership(db, m1)).toBeNull(); // cascade
   });
+
+  it("kickMember is scoped to host: hostB cannot kick hostA's members", () => {
+    const db = openDb(":memory:");
+    const hostA = createUser(db, "hostA", "h", "t");
+    const hostB = createUser(db, "hostB", "h", "t");
+    const m2 = createUser(db, "m2", "h", "t");
+
+    // hostA creates collab, hostB creates separate collab
+    createCollab(db, hostA, "CODEA", "t");
+    createCollab(db, hostB, "CODEB", "t");
+
+    // m2 joins hostA's collab
+    expect(joinByCode(db, m2, "CODEA", "t")).toEqual({ ok: true });
+
+    // hostB tries to kick m2 (should be no-op: m2 is not in hostB's collab)
+    kickMember(db, hostB, m2);
+
+    // m2 should still be in hostA's collab
+    const mem = getMembership(db, m2);
+    expect(mem).not.toBeNull();
+    expect(mem!.host_user_id).toBe(hostA);
+    expect(listMembers(db, hostA)).toHaveLength(1);
+    expect(listMembers(db, hostA)[0].member_user_id).toBe(m2);
+
+    // hostA kicks m2 (should work)
+    kickMember(db, hostA, m2);
+    expect(getMembership(db, m2)).toBeNull();
+    expect(listMembers(db, hostA)).toHaveLength(0);
+  });
+
+  it("freshInviteCode throws after 5 collisions", () => {
+    const { db, host } = seed();
+    createCollab(db, host, "TAKEN", "t");
+
+    // gen always returns "TAKEN", should exhaust retries and throw
+    expect(() => freshInviteCode(db, () => "TAKEN")).toThrow("Gagal membuat kode undangan");
+  });
 });
