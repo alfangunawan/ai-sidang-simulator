@@ -32,7 +32,9 @@ describe("CollabSettings", () => {
     ) as any;
     render(<CollabSettings />);
     expect(await screen.findByText("deadbeefdead")).toBeTruthy();
-    expect(screen.getByLabelText(/bagikan ai/i)).toBeTruthy();
+    // three share toggles (AI / Suara / Diktasi) render for a host
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect((screen.getByRole("checkbox", { name: /AI/ }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("shows both the host panel and the joined panel when a user hosts AND is joined elsewhere", async () => {

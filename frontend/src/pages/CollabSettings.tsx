@@ -121,30 +121,35 @@ export function CollabSettings() {
 
           <div className="field">
             <label>Bagikan ke anggota</label>
-            <label>
-              <input
-                type="checkbox"
-                checked={!!hosting.shares.share_ai}
-                onChange={() => onToggleShare("share_ai")}
-              />{" "}
-              Bagikan AI
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={!!hosting.shares.share_tts}
-                onChange={() => onToggleShare("share_tts")}
-              />{" "}
-              Bagikan TTS
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={!!hosting.shares.share_stt}
-                onChange={() => onToggleShare("share_stt")}
-              />{" "}
-              Bagikan STT
-            </label>
+            <div className="share-toggles">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!hosting.shares.share_ai}
+                  onChange={() => onToggleShare("share_ai")}
+                />
+                <span>AI</span>
+                <span className="hint">jawaban penguji</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!hosting.shares.share_tts}
+                  onChange={() => onToggleShare("share_tts")}
+                />
+                <span>Suara (TTS)</span>
+                <span className="hint">text-to-speech</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!hosting.shares.share_stt}
+                  onChange={() => onToggleShare("share_stt")}
+                />
+                <span>Diktasi (STT)</span>
+                <span className="hint">speech-to-text</span>
+              </label>
+            </div>
           </div>
 
           <div className="field">
