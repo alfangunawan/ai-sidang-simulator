@@ -331,6 +331,11 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
 }
 input[type="file"] { padding: 10px 12px; font-size: 13px; cursor: pointer; }
+/* Checkboxes/radios must not inherit the full-width text-input box above. */
+input[type="checkbox"], input[type="radio"] {
+  width: auto; margin: 0; padding: 0; flex: none;
+  accent-color: var(--brand); cursor: pointer;
+}
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 .field { margin-bottom: 16px; }
@@ -1031,11 +1036,20 @@ input[type="file"] { padding: 10px 12px; font-size: 13px; cursor: pointer; }
 /* ============================================================
    Settings — collaboration
    ============================================================ */
-.collab .field label { display: block; margin-bottom: 6px; }
-.collab .field label:has(input[type="checkbox"]) {
-  display: flex; align-items: center; gap: 8px;
-  font-weight: 400; margin-bottom: 8px;
+.collab .field > label { display: block; margin-bottom: 6px; }
+.share-toggles { display: flex; flex-direction: column; gap: 2px; }
+.share-toggles label {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0; padding: 9px 12px;
+  font-weight: 600; font-size: 13.5px; color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: var(--r-ctl);
+  cursor: pointer; transition: border-color .15s, background .15s;
 }
+.share-toggles label:hover { border-color: var(--brand); background: var(--panel-2); }
+.share-toggles label:has(input:checked) {
+  border-color: var(--brand); background: var(--brand-tint);
+}
+.share-toggles .hint { margin: 0 0 0 auto; font-weight: 400; }
 .collab-code {
   font-family: ui-monospace, monospace;
   font-size: 13.5px;
