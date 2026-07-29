@@ -418,3 +418,52 @@ Diukur dengan `backend/scripts/grounding.ts` atas giliran penguji yang sudah ter
 Satu keputusan pengukuran yang penting: **tuntutan generik seperti "di halaman berapa?" tidak dihitung tertambat.** Kalimat itu bisa diucapkan model yang tidak membaca naskah sama sekali; hanya rujukan konkret ("Tabel IV-1 pada halaman 62") yang dihitung. Tanpa pembedaan ini, model buta konteks mendapat skor sama dan gerbangnya jadi tidak berarti. Self-check di skrip mengunci perilaku ini.
 
 Sampel 11 giliran itu kecil. Sebelum Tahap 2, jalankan satu sesi baseline penuh (15 giliran, jawaban skrip) supaya perbandingan sesudah punya dasar yang layak.
+
+---
+
+## 16. Hasil Tahap 1 (2026-07-29)
+
+Terkirim: `src/chunker.ts`, `src/repos/chunks.ts`, tabel `chunks` di `db.ts`, `routes/skripsi.ts` dengan `mergePages: false`, `test/chunker.test.ts` (12 kasus). Suite penuh 201 lulus.
+
+### 16.1 `mergePages: true` menghapus seluruh struktur baris
+
+Diverifikasi langsung pada PDF yang sama:
+
+```
+mergePages: true   -> 24.513 char,   0 newline
+mergePages: false  -> 24.519 char, 884 newline
+```
+
+unpdf meratakan setiap line break jadi spasi ketika halaman digabung. Jadi bukan hanya nomor halaman yang hilang di jalur lama (§5.1 sudah menduga itu) — **judul bab dan subbab ikut hilang**, karena keduanya hanya dikenali sebagai baris pendek yang berdiri sendiri.
+
+### 16.2 Premis §4.1 batal untuk dokumen lama
+
+§4.1 menyatakan `documents.full_text` disimpan supaya chunk/dossier bisa dibangun ulang "tanpa minta user upload lagi". Untuk dokumen yang diunggah **sebelum** Tahap 1, premis itu **tidak berlaku**: `full_text` mereka sudah kehilangan newline secara permanen. Dibuktikan pada tiga dokumen nyata di DB — 302.447 / 246.121 / 344.182 karakter, masing-masing **satu baris**, nol kecocokan `BAB`/`DAFTAR PUSTAKA`/subbab.
+
+Konsekuensi: **tiga dokumen yang ada harus diunggah ulang.** Tidak ada kode backfill — dokumen lama juga belum punya dossier, jadi gerbang `dossier_status` di Tahap 2 sudah memaksa unggah ulang. Menambah backfill hanya akan menghasilkan chunk tanpa judul, yang lebih buruk daripada tidak ada.
+
+Mulai Tahap 1 premis §4.1 kembali berlaku: rute menyimpan `pages.join("\n\n")`, sehingga struktur baris ikut tersimpan di `full_text` dan pembangunan ulang tetap mungkin.
+
+### 16.3 Hasil pada PDF nyata (7 halaman, dua kolom)
+
+```
+7 halaman -> 26 chunk
+retensi 112%          (>100% wajar: overlap 150 char diulang)
+chunk ber-heading     23/26
+halaman terwakili     7/7
+panjang min/med/max   288 / 1.165 / 1.200
+```
+
+### 16.4 Regex subbab menuntut huruf besar
+
+Jalannya chunker pada PDF nyata memunculkan dua judul palsu — `"0.13 inches afterward."` dan `"0.4 inches below the final address…"` — baris pendek yang kebetulan diawali angka desimal dan lolos `/^\d+\.\d+[\s.]/`.
+
+Ini bukan cacat kosmetik. Chunk yang dilabeli lokasi salah membuat penguji menyebut bagian yang keliru, dan itu merusak metrik yang justru jadi gerbang §9.
+
+Pola dikeraskan jadi `/^\d+\.\d+(\.\d+)*\.?\s+[A-Z]/` — kata sesudah nomor wajib berhuruf besar. Kedua judul palsu hilang, dua judul asli yang tadinya tertutup (`2.4. Abstract`, `2.5.1. SECTIONS AND SUBSECTIONS`) muncul. Bahasa Indonesia relatif aman di sini karena desimal memakai koma, tapi syarat huruf besar tetap dipasang untuk kasus seperti "2.5 kali lipat".
+
+### 16.5 Catatan untuk Tahap 2
+
+- `getActiveDocument` kini mengembalikan `id`; `replaceDocument` mengembalikan `lastInsertRowid`. Dossier menggantung pada id yang sama.
+- Menghapus/mengganti dokumen ikut menghapus chunk lewat `ON DELETE CASCADE` (`foreign_keys` sudah `ON` di `openDb`).
+- `POST /skripsi` kini mengembalikan `chunk_count` — dipakai UI Tahap 3 untuk membedakan "PDF terbaca tapi tidak menghasilkan chunk" dari "dossier belum jadi".
