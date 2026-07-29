@@ -7,10 +7,11 @@ import {
   getActiveDocument,
   deleteDocument,
   getDossierRow,
+  setDossierReady,
 } from "../repos/documents.js";
 import { chunkPages } from "../chunker.js";
 import { replaceChunks, countChunks } from "../repos/chunks.js";
-import { buildDossier } from "../dossier.js";
+import { buildDossier, parseDossier, DOSSIER_VERSION, type Dossier } from "../dossier.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -72,6 +73,42 @@ export function skripsiRouter(
       dossier_error: d?.dossier_error ?? null,
       uploaded_at: doc.created_at,
     });
+  });
+
+  r.get("/dossier", (req, res) => {
+    const userId = req.userId!;
+    const doc = getActiveDocument(db, userId);
+    if (!doc) return res.json(null);
+    const d = getDossierRow(db, doc.id);
+    res.json({
+      status: d?.dossier_status ?? null,
+      error: d?.dossier_error ?? null,
+      model: d?.dossier_model ?? null,
+      dossier: d?.dossier ? (JSON.parse(d.dossier) as Dossier) : null,
+    });
+  });
+
+  /**
+   * Suntingan manual user. Divalidasi lewat parseDossier yang sama dengan
+   * keluaran model — dossier hasil suntingan tidak boleh bisa melanggar bentuk
+   * yang tidak akan diterima dari model.
+   */
+  r.put("/dossier", (req, res) => {
+    const userId = req.userId!;
+    const doc = getActiveDocument(db, userId);
+    if (!doc) return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
+    try {
+      const dossier = parseDossier(JSON.stringify(req.body ?? {}));
+      setDossierReady(db, doc.id, JSON.stringify(dossier), DOSSIER_VERSION, "manual");
+      res.json({ dossier });
+    } catch (e) {
+      res.status(400).json({
+        error:
+          (e as Error).message === "dossier missing judul/rumusan_masalah"
+            ? "Dossier wajib punya judul dan minimal satu rumusan masalah"
+            : "Dossier tidak valid",
+      });
+    }
   });
 
   // Jalan pemulihan ketika dossier gagal atau modelnya diganti. Tanpa ini,

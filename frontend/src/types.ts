@@ -68,10 +68,43 @@ export interface TestResult {
   ok: boolean;
   error?: string;
 }
+export type DossierStatus = "pending" | "ready" | "failed";
 export interface SkripsiInfo {
   filename: string;
   char_count: number;
   uploaded_at: string;
+  chunk_count?: number;
+  dossier_status?: DossierStatus | null;
+  dossier_error?: string | null;
+}
+export interface Dossier {
+  judul: string;
+  rumusan_masalah: string[];
+  tujuan: string[];
+  batasan: string[];
+  metode: { nama: string; justifikasi: string };
+  instrumen: string[];
+  populasi_sampel: { deskripsi: string; jumlah: number | null };
+  hasil_kunci: { klaim: string; angka: string; sumber: string }[];
+  kesimpulan: string[];
+  keterbatasan: string[];
+  peta_bab: { judul: string; halaman_mulai: number | null }[];
+  fakta_struktural: {
+    jumlah_rumusan_masalah: number;
+    jumlah_kesimpulan: number;
+    rumusan_tanpa_kesimpulan: string[];
+    sitasi_bab2_tidak_di_daftar_pustaka: string[];
+    jumlah_tabel: number;
+    jumlah_gambar: number;
+  };
+  modul_kritik_terpicu: string[];
+  poin_serangan: string[];
+}
+export interface DossierView {
+  status: DossierStatus | null;
+  error: string | null;
+  model: string | null;
+  dossier: Dossier | null;
 }
 export interface SessionSummary {
   id: string;

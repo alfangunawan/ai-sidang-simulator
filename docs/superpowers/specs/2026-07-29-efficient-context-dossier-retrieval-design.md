@@ -535,3 +535,37 @@ IDF dihitung atas isi skripsi. Kata seperti "jelaskan", "sebutkan", "tunjukkan" 
 - **Dossier nyata belum pernah dibangun.** Semua test memakai fixture. Ukuran, kualitas kutipan verbatim, dan ketepatan `poin_serangan` baru terbukti setelah satu skripsi asli diunggah.
 - **Grounding belum diukur ulang.** Gerbang §9 (≥81,8%) masih terbuka; butuh sesi nyata dengan `scripts/grounding.ts`.
 - `phaseBlock` sudah ada di kontrak tetapi belum diisi — itu Tahap 5.
+
+---
+
+## 18. Hasil Tahap 3 (2026-07-29)
+
+Terkirim: `GET/PUT /skripsi/dossier`, panel Dossier di SettingsPage, `types.ts` + `api.ts`, `.dossier-facts` di `styles.css`. Backend **228 lulus**, frontend **72 lulus**, keduanya typecheck, frontend build bersih.
+
+### 18.1 Gerbang "blokir mulai sidang" tidak perlu kode frontend
+
+§10 meminta UI memblokir mulai sidang sampai `dossier_status = 'ready'`. Ternyata sudah berlaku tanpa kode baru: SessionPage tidak pernah punya gerbang skripsi sendiri — ia menampilkan pesan error dari backend, dan Tahap 2 sudah membuat `POST /sessions/:id/turn` membalas 400 dengan pesan yang membedakan `pending` dari `failed`.
+
+Menambah gerbang kedua di frontend hanya menduplikasi aturan yang sudah dipegang backend, dan duplikat itulah yang biasanya lepas sinkron. Yang ditambahkan cuma penjelasannya di panel Pengaturan ("sidang belum bisa dimulai sampai selesai"), bukan penegakannya.
+
+### 18.2 Suntingan manual lewat validator yang sama
+
+`PUT /skripsi/dossier` memvalidasi lewat `parseDossier` yang sama dengan keluaran model. Dossier hasil suntingan tangan tidak boleh bisa melanggar bentuk yang akan ditolak dari model — kalau tidak, jalur pemulihan justru jadi jalur masuk dossier rusak. Test mengunci: suntingan yang menghapus judul ditolak 400 dan yang tersimpan tetap versi lama.
+
+### 18.3 Tujuan #4 tercapai
+
+§2 tujuan 4: "Menghilangkan `attack_points` kosong." Textarea manual yang selalu kosong diganti daftar `poin_serangan` hasil pembacaan naskah — tetap bisa disunting, tetapi tidak lagi dimulai dari nol.
+
+Setelan `attack_points` di backend **tidak dihapus**. Nilainya masih ikut `buildPersona` dan masih di-round-trip oleh form, jadi user lama yang pernah mengisinya tidak kehilangan apa pun; user baru mendapat "" dan hanya melihat poin dari dossier. Membuang setelannya berarti perubahan yang merusak tanpa keuntungan sepadan.
+
+### 18.4 Polling, bukan push
+
+Pembangunan dossier berjalan di luar request upload, jadi panel menanya ulang tiap 3 detik selama `pending`. Tidak ada websocket/SSE: satu polling ringan selama ~1 menit, sekali per unggahan.
+
+### 18.5 Panel menampilkan fakta agregatif
+
+Selain poin serangan, panel menampilkan `jumlah_rumusan_masalah / jumlah_kesimpulan`, jumlah rumusan yang belum terjawab, metode, jumlah responden, dan modul kritik yang terpicu. Itu justru bagian dossier yang paling sulit diverifikasi user dari naskah, dan paling merusak bila salah — menaruhnya di depan mata membuat dossier meleset ketahuan sebelum sidang dimulai, bukan sesudah.
+
+### 18.6 `dossier` masuk rincian pemakaian token
+
+`UsageKind` bertambah `"dossier"`, dan panel Pemakaian token melabelinya "Baca skripsi" — biaya sekali-per-dokumen itu harus terlihat terpisah dari biaya per giliran, karena keduanya berperilaku sangat berbeda.

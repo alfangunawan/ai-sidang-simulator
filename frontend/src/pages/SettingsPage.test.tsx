@@ -3,7 +3,39 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { SettingsPage } from "./SettingsPage.js";
 import * as api from "../api.js";
 
-import type { SettingsView } from "../types.js";
+import type { SettingsView, Dossier, SkripsiInfo } from "../types.js";
+
+const SKRIPSI: SkripsiInfo = {
+  filename: "skripsi.pdf",
+  char_count: 302447,
+  uploaded_at: "2026-07-29T00:00:00Z",
+  chunk_count: 271,
+  dossier_status: "ready",
+};
+
+const DOSSIER: Dossier = {
+  judul: "Perancangan Chatbot Skrining Kecemasan",
+  rumusan_masalah: ["RM satu?", "RM dua?"],
+  tujuan: [],
+  batasan: [],
+  metode: { nama: "Prototyping", justifikasi: "" },
+  instrumen: [],
+  populasi_sampel: { deskripsi: "Mahasiswa", jumlah: 113 },
+  hasil_kunci: [],
+  kesimpulan: ["Kesimpulan satu."],
+  keterbatasan: [],
+  peta_bab: [],
+  fakta_struktural: {
+    jumlah_rumusan_masalah: 2,
+    jumlah_kesimpulan: 1,
+    rumusan_tanpa_kesimpulan: ["RM dua?"],
+    sitasi_bab2_tidak_di_daftar_pustaka: [],
+    jumlah_tabel: 12,
+    jumlah_gambar: 8,
+  },
+  modul_kritik_terpicu: ["sistem", "ai"],
+  poin_serangan: ["RM dua tidak terjawab di kesimpulan."],
+};
 
 const VIEW: SettingsView = {
   provider: "claude",
@@ -51,6 +83,7 @@ beforeEach(() => {
     since: null,
   });
   vi.spyOn(api, "getCollab").mockResolvedValue({ hosting: null, joined: null });
+  vi.spyOn(api, "getDossier").mockResolvedValue(null);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -236,5 +269,64 @@ describe("SettingsPage", () => {
 
     expect(await screen.findByText("gagal hapus")).toBeTruthy();
     expect(screen.getByText(/x\.pdf/)).toBeTruthy();
+  });
+});
+
+describe("SettingsPage — panel dossier", () => {
+  function withDossier(over: Partial<Parameters<typeof api.saveDossier>[0]> = {}) {
+    vi.spyOn(api, "getSkripsi").mockResolvedValue(SKRIPSI);
+    vi.spyOn(api, "getDossier").mockResolvedValue({
+      status: "ready",
+      error: null,
+      model: "z-ai/glm-5.2",
+      dossier: { ...DOSSIER, ...over },
+    });
+  }
+
+  it("prefills the attack points the model found, instead of a blank textarea", async () => {
+    withDossier();
+    render(<SettingsPage />);
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("RM dua tidak terjawab di kesimpulan.")).toBeTruthy(),
+    );
+    // Fakta struktural yang menjawab pertanyaan agregatif penguji.
+    expect(screen.getByText(/2 \/ 1/)).toBeTruthy();
+    expect(screen.getByText(/1 rumusan belum terjawab/)).toBeTruthy();
+    expect(screen.getByText(/sistem, ai/)).toBeTruthy();
+  });
+
+  it("saves edited attack points one per line", async () => {
+    withDossier();
+    const save = vi.spyOn(api, "saveDossier").mockResolvedValue(DOSSIER);
+    render(<SettingsPage />);
+    const box = await screen.findByDisplayValue("RM dua tidak terjawab di kesimpulan.");
+    fireEvent.change(box, { target: { value: "poin satu\n\n  poin dua  \n" } });
+    fireEvent.click(screen.getByText("Simpan poin serangan"));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0].poin_serangan).toEqual(["poin satu", "poin dua"]);
+  });
+
+  it("explains that a sidang cannot start while the dossier is still building", async () => {
+    vi.spyOn(api, "getSkripsi").mockResolvedValue({ ...SKRIPSI, dossier_status: "pending" });
+    vi.spyOn(api, "getDossier").mockResolvedValue({
+      status: "pending", error: null, model: null, dossier: null,
+    });
+    render(<SettingsPage />);
+    await waitFor(() => expect(screen.getByText(/sidang belum bisa dimulai/)).toBeTruthy());
+  });
+
+  it("surfaces the build error and offers a rebuild", async () => {
+    vi.spyOn(api, "getSkripsi").mockResolvedValue({ ...SKRIPSI, dossier_status: "failed" });
+    vi.spyOn(api, "getDossier").mockResolvedValue({
+      status: "failed",
+      error: "Model kehabisan token output sebelum dossier selesai.",
+      model: null,
+      dossier: null,
+    });
+    const rebuild = vi.spyOn(api, "rebuildDossier").mockResolvedValue("pending");
+    render(<SettingsPage />);
+    await waitFor(() => expect(screen.getByText(/kehabisan token output/)).toBeTruthy());
+    fireEvent.click(screen.getByText("Baca ulang skripsi"));
+    await waitFor(() => expect(rebuild).toHaveBeenCalled());
   });
 });

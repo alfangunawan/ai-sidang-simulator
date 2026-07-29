@@ -10,14 +10,25 @@ import type {
   UsageView,
   User,
   CollabState,
+  Dossier,
+  DossierView,
+  DossierStatus,
 } from "./types.js";
 
-function postJson(url: string, body: unknown): Promise<Response> {
+function sendJson(method: string, url: string, body: unknown): Promise<Response> {
   return fetch(url, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+function postJson(url: string, body: unknown): Promise<Response> {
+  return sendJson("POST", url, body);
+}
+
+function putJson(url: string, body: unknown): Promise<Response> {
+  return sendJson("PUT", url, body);
 }
 
 let onUnauthorized: (() => void) | null = null;
@@ -185,6 +196,19 @@ export async function uploadSkripsi(file: File): Promise<SkripsiInfo> {
 
 export async function deleteSkripsi(): Promise<void> {
   await jsonOrThrow(await fetch("/api/skripsi", { method: "DELETE" }));
+}
+
+export async function getDossier(): Promise<DossierView | null> {
+  return jsonOrThrow(await fetch("/api/skripsi/dossier"));
+}
+
+export async function saveDossier(dossier: Dossier): Promise<Dossier> {
+  return (await jsonOrThrow(await putJson("/api/skripsi/dossier", dossier))).dossier as Dossier;
+}
+
+export async function rebuildDossier(): Promise<DossierStatus | null> {
+  const res = await jsonOrThrow(await postJson("/api/skripsi/dossier/rebuild", {}));
+  return res.dossier_status ?? null;
 }
 
 export async function me(): Promise<User | null> {

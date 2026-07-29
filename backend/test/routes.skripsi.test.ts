@@ -6,6 +6,8 @@ import { dirname, join } from "node:path";
 import request from "supertest";
 import { buildApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
+import { replaceDocument } from "../src/repos/documents.js";
+import { seedDossier, SAMPLE_DOSSIER } from "./fixtures/dossier.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const samplePdf = readFileSync(join(here, "fixtures/sample.pdf"));
@@ -59,5 +61,68 @@ describe("skripsi routes", () => {
     await a.delete("/skripsi");
     const get = await a.get("/skripsi");
     expect(get.body).toBeNull();
+  });
+});
+
+describe("dossier endpoints", () => {
+  async function withDoc() {
+    const db = openDb(":memory:");
+    const key = randomBytes(32);
+    const app = buildApp(db, key);
+    const agent = request.agent(app);
+    const { body } = await agent
+      .post("/auth/register")
+      .send({ username: "tester", password: "password1" });
+    const documentId = replaceDocument(
+      db,
+      body.user.id,
+      "thesis.pdf",
+      "ISI",
+      "2026-01-01T00:00:00Z",
+    );
+    return { agent, db, documentId };
+  }
+
+  it("returns null before any document is uploaded", async () => {
+    const db = openDb(":memory:");
+    const agent = request.agent(buildApp(db, randomBytes(32)));
+    await agent.post("/auth/register").send({ username: "tester", password: "password1" });
+    expect((await agent.get("/skripsi/dossier")).body).toBeNull();
+  });
+
+  it("serves the stored dossier with its status and model", async () => {
+    const { agent, db, documentId } = await withDoc();
+    seedDossier(db, documentId);
+    const res = await agent.get("/skripsi/dossier");
+    expect(res.body.status).toBe("ready");
+    expect(res.body.model).toBe("test/model");
+    expect(res.body.dossier.judul).toBe(SAMPLE_DOSSIER.judul);
+  });
+
+  it("accepts an edited dossier and serves it back", async () => {
+    const { agent, db, documentId } = await withDoc();
+    seedDossier(db, documentId);
+    const edited = { ...SAMPLE_DOSSIER, poin_serangan: ["poin baru"] };
+    expect((await agent.put("/skripsi/dossier").send(edited)).status).toBe(200);
+    expect((await agent.get("/skripsi/dossier")).body.dossier.poin_serangan).toEqual(["poin baru"]);
+  });
+
+  // Suntingan manual lewat jalur validasi yang sama dengan keluaran model —
+  // dossier hasil edit tidak boleh bisa melanggar bentuk yang ditolak dari model.
+  it("rejects an edit that strips judul or rumusan_masalah", async () => {
+    const { agent, db, documentId } = await withDoc();
+    seedDossier(db, documentId);
+    const res = await agent.put("/skripsi/dossier").send({ ...SAMPLE_DOSSIER, judul: "" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/judul dan minimal satu rumusan masalah/);
+    // Yang tersimpan tetap versi lama, bukan yang cacat.
+    expect((await agent.get("/skripsi/dossier")).body.dossier.judul).toBe(SAMPLE_DOSSIER.judul);
+  });
+
+  it("400s a rebuild when there is no document", async () => {
+    const db = openDb(":memory:");
+    const agent = request.agent(buildApp(db, randomBytes(32)));
+    await agent.post("/auth/register").send({ username: "tester", password: "password1" });
+    expect((await agent.post("/skripsi/dossier/rebuild")).status).toBe(400);
   });
 });
