@@ -654,3 +654,48 @@ Jalur upgrade sudah ditulis sebagai komentar `ponytail:` di `phaseWindow`: minta
 | **total** | **12.465** |
 
 Tahap 6 (pemangkasan history) kini jelas menjadi sisa terbesar: 3.522 token, **lebih besar dari seluruh hasil Tahap 5**.
+
+---
+
+## 21. Hasil Tahap 6 (2026-07-29)
+
+Terkirim: `trimHistory` di `prompt.ts`, dipanggil dari dalam `mapHistory`. `buildSystemText` dihapus — mati sejak `TurnContext` menggantikannya. Backend **249 lulus**, tsc bersih.
+
+### 21.1 History dua kali lebih besar dari perkiraan
+
+§15.2 dan §17.1 memakai perkiraan panjang giliran. Angka nyata dari tabel `turns`:
+
+| | giliran | rata-rata | maksimum |
+|---|---|---|---|
+| penguji | 17 | 272 char | 491 |
+| mahasiswa | 17 | 413 char | **1.924** |
+| — sesi terpanjang, penguji | 11 | 331 | |
+| — sesi terpanjang, mahasiswa | 11 | 596 | |
+
+Jawaban lisan memang bertele-tele. Pada 15 tanya-jawab dengan angka sesi terpanjang, history adalah **6.046 token** — bukan 3.522 seperti yang tercatat di §17.1, dan bagian tunggal terbesar di anggaran per giliran.
+
+### 21.2 Hasil: 6.046 → 3.985 token
+
+Terpangkas ~34%, bukan separuh. Penyebabnya disengaja: **pertanyaan penguji tidak pernah dipotong**, dan pada sidang panjang merekalah sisa terbesar. Persona melarang penguji mengulang pertanyaan yang sudah diajukan, dan ia hanya bisa mematuhi aturan itu kalau pertanyaan lamanya masih terbaca utuh. Memangkasnya akan menghemat ~2.000 token lagi dengan menukar aturan yang jelas dipatuhi hari ini.
+
+Yang dipotong hanya jawaban mahasiswa di luar 6 giliran terakhir, ke 200 karakter pertama. Bagian awal jawaban dipertahankan karena di situ mahasiswa menyebut intinya; risikonya angka yang disebut di ekor jawaban lama hilang. Kalau konfrontasi lintas-giliran melemah, perbaikannya menyimpan angka jawaban lewat regex — bukan memanjangkan potongan. Ditulis sebagai komentar `ponytail:` di kodenya.
+
+### 21.3 Pemangkasan duduk di `mapHistory`
+
+Bukan di pemanggil. Kedua provider melewati `mapHistory`, jadi tidak ada jalur yang bisa lupa memangkas — satu titik cekik, bukan dua tempat yang harus diingat. Transkrip untuk penilaian tidak lewat sini: ia dibaca langsung dari SQLite lewat `formatTranscript`, sesuai §7.2.
+
+### 21.4 Anggaran per giliran, final
+
+| Komponen | token |
+|---|---|
+| persona | 2.477 |
+| blok fase (2 modul, n=8) | 1.337 |
+| dossier ~3.500 | 3.500 |
+| kutipan 3 × 1.200 char | 1.621 |
+| history dipangkas | 3.985 |
+| **total** | **12.920** |
+| sebelum (terukur) | 147.000 |
+
+**11,4× lebih kecil.** Target §2 (≤15.000, sasaran ~12.000) terpenuhi.
+
+Angka ini memakai dossier 3.500 token — batas atas yang dipasang di prompt pembangunnya. Dossier nyata belum pernah dibangun, jadi 3.500 adalah asumsi paling konservatif, bukan hasil ukur.
