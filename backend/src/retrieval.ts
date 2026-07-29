@@ -120,6 +120,16 @@ export function retrieve(chunks: Chunk[], query: string, k = 3): Chunk[] {
   return search(buildIndex(chunks), query, k);
 }
 
+/** Kutipan berlabel lokasi, siap disitir: "[BAB III METODOLOGI, hlm. 41] …". */
+export function formatChunks(chunks: Chunk[]): string {
+  return chunks
+    .map((c) => {
+      const where = [c.heading, c.page ? `hlm. ${c.page}` : null].filter(Boolean).join(", ");
+      return `[${where || "naskah"}] ${c.text}`;
+    })
+    .join("\n\n");
+}
+
 /**
  * Kutipan ditempel ke pesan user, bukan system block (§4 keputusan #4 PRD).
  * Label "bukan ucapan mahasiswa" wajib: tanpa itu model berisiko membaca
@@ -127,9 +137,5 @@ export function retrieve(chunks: Chunk[], query: string, k = 3): Chunk[] {
  */
 export function formatExcerpts(chunks: Chunk[]): string {
   if (!chunks.length) return "";
-  const lines = chunks.map((c) => {
-    const where = [c.heading, c.page ? `hlm. ${c.page}` : null].filter(Boolean).join(", ");
-    return `[${where || "naskah"}] ${c.text}`;
-  });
-  return `\n\n---\nKUTIPAN NASKAH YANG RELEVAN (rujukan Anda, bukan ucapan mahasiswa):\n${lines.join("\n\n")}`;
+  return `\n\n---\nKUTIPAN NASKAH YANG RELEVAN (rujukan Anda, bukan ucapan mahasiswa):\n${formatChunks(chunks)}`;
 }

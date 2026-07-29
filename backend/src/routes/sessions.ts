@@ -8,7 +8,7 @@ import { getActiveDocument, getDossierRow } from "../repos/documents.js";
 import { getChunks } from "../repos/chunks.js";
 import { buildPersona } from "../persona.js";
 import { formatDossier, type Dossier } from "../dossier.js";
-import { retrieve, formatExcerpts } from "../retrieval.js";
+import { retrieve, formatExcerpts, formatChunks } from "../retrieval.js";
 import {
   createSession,
   listSessions,
@@ -199,12 +199,28 @@ export function sessionsRouter(
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
+    const closeDossier = getDossierRow(db, doc.id);
+    if (closeDossier?.dossier_status !== "ready" || !closeDossier.dossier) {
+      return res.status(400).json({
+        error: "Dossier skripsi belum siap. Buka Pengaturan untuk membangun ulang.",
+      });
+    }
 
     try {
       const cfg = getEffectiveLlmConfig(db, userId, key);
       const provider = getProvider(cfg);
       const system = buildAssessmentSystem();
-      const user = buildAssessmentUser(doc.full_text, formatTranscript(getTurns(db, sessionId)));
+      const transcript = formatTranscript(getTurns(db, sessionId));
+      // Bagian naskah yang paling menyangkut apa yang benar-benar dibahas.
+      // PRD §8 menyebut "chunk paling sering ter-retrieve selama sesi"; satu
+      // pencarian dengan transkrip penuh sebagai kueri memberi hasil yang sama
+      // tanpa harus mencatat riwayat retrieval tiap giliran.
+      const excerpts = retrieve(getChunks(db, doc.id), transcript, 5);
+      const user = buildAssessmentUser(
+        formatDossier(JSON.parse(closeDossier.dossier) as Dossier),
+        transcript,
+        formatChunks(excerpts),
+      );
 
       // Every attempt is billed, so each one is recorded — including the one
       // whose output failed to parse.

@@ -86,9 +86,23 @@ Keluarkan HANYA JSON valid (tanpa teks lain, tanpa code fence) dengan bentuk per
 }`;
 }
 
-// Transcript is untrusted user input embedded directly into the prompt; scores are clamped and grade/verdict are re-derived in parseAssessment, so injection can only influence free-text fields (ringkasan/kelebihan/kekurangan/saran).
-export function buildAssessmentUser(skripsi: string, transcript: string): string {
-  return `ISI SKRIPSI:\n${skripsi}\n\nTRANSKRIP SIDANG:\n${transcript}`;
+/**
+ * Transcript is untrusted user input embedded directly into the prompt; scores
+ * are clamped and grade/verdict are re-derived in parseAssessment, so injection
+ * can only influence free-text fields (ringkasan/kelebihan/kekurangan/saran).
+ *
+ * Naskah utuh diganti dossier. Penilaian memang bertumpu pada transkrip —
+ * system prompt di atas menyuruhnya begitu — tetapi `kualitas_orisinalitas`
+ * butuh sedikit naskah asli, maka kutipan paling relevan ikut dikirim.
+ */
+export function buildAssessmentUser(
+  dossier: string,
+  transcript: string,
+  excerpts = "",
+): string {
+  const parts = [`${dossier}`, `TRANSKRIP SIDANG:\n${transcript}`];
+  if (excerpts) parts.push(`KUTIPAN NASKAH TERKAIT:\n${excerpts}`);
+  return parts.join("\n\n");
 }
 
 export function parseAssessment(text: string): Assessment {

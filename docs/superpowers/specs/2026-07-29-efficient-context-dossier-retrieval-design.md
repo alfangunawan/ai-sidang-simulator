@@ -566,6 +566,37 @@ Pembangunan dossier berjalan di luar request upload, jadi panel menanya ulang ti
 
 Selain poin serangan, panel menampilkan `jumlah_rumusan_masalah / jumlah_kesimpulan`, jumlah rumusan yang belum terjawab, metode, jumlah responden, dan modul kritik yang terpicu. Itu justru bagian dossier yang paling sulit diverifikasi user dari naskah, dan paling merusak bila salah — menaruhnya di depan mata membuat dossier meleset ketahuan sebelum sidang dimulai, bukan sesudah.
 
-### 18.6 `dossier` masuk rincian pemakaian token
+### 18.7 `dossier` masuk rincian pemakaian token
 
 `UsageKind` bertambah `"dossier"`, dan panel Pemakaian token melabelinya "Baca skripsi" — biaya sekali-per-dokumen itu harus terlihat terpisah dari biaya per giliran, karena keduanya berperilaku sangat berbeda.
+
+---
+
+## 19. Hasil Tahap 4 (2026-07-29)
+
+Terkirim: `buildAssessmentUser` menerima dossier + kutipan, rute `close` memakai keduanya, `formatChunks` dipisah dari `formatExcerpts`. Backend **231 lulus**, tsc bersih.
+
+### 19.1 Penilaian turun 13,6×
+
+| | token |
+|---|---|
+| sebelum (terukur) | 142.884 |
+| sesudah, dossier ~3.500 | **10.520** |
+| — system | 691 |
+| — dossier | ~3.500 |
+| — transkrip 30 giliran | ~3.600 |
+| — 5 kutipan × 1.200 char | ~2.700 |
+
+Skema `Assessment`, `deriveGrade`, `deriveVerdict`, `parseAssessment`, dan `ASSESSMENT_MAX_TOKENS` tidak berubah, sesuai §8.
+
+### 19.2 Riwayat retrieval tidak dicatat
+
+§8 meminta "chunk yang paling sering ter-retrieve selama sesi (maks 5)". Itu menuntut pencatatan hasil retrieval tiap giliran — tabel baru, tulisan tiap giliran, dan satu lagi keadaan yang bisa lepas sinkron dengan `chunks`.
+
+Satu pencarian pada saat menutup, dengan **transkrip penuh sebagai kueri**, memberi hasil yang setara: chunk yang paling menyangkut apa yang benar-benar dibahas. Frekuensi retrieval per giliran hanyalah perkiraan kasar dari hal yang sama. Skor BM25 di sini memakai himpunan istilah unik kueri, jadi transkrip panjang terbaca sebagai "seluruh topik yang dibahas", bukan didominasi kata yang paling sering diulang.
+
+Test menguncinya: chunk tentang SUS/responden terpilih, chunk tentang fotosintesis tidak — semata karena yang pertama dibahas di sidang.
+
+### 19.3 Gerbang dossier ikut ke rute close
+
+`POST /sessions/:id/close` kini menolak 400 bila dossier tidak `ready`, sama seperti rute turn. Tanpa itu satu sesi bisa berjalan penuh lalu gagal dinilai di ujung — kegagalan pada titik paling mahal.
