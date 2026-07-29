@@ -27,6 +27,16 @@ export const SAMPLE_DOSSIER: Dossier = {
 };
 
 /** Menandai dokumen siap dipakai sidang. Tanpa ini rute turn menolak dengan 400. */
-export function seedDossier(db: Database.Database, documentId: number): void {
-  setDossierReady(db, documentId, JSON.stringify(SAMPLE_DOSSIER), DOSSIER_VERSION, "test/model");
+export function seedDossier(
+  db: Database.Database,
+  documentId: number,
+  over: Partial<Dossier> = {},
+): void {
+  setDossierReady(
+    db,
+    documentId,
+    JSON.stringify({ ...SAMPLE_DOSSIER, ...over }),
+    DOSSIER_VERSION,
+    "test/model",
+  );
 }

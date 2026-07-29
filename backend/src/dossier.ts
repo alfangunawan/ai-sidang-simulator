@@ -12,6 +12,7 @@ import { getProvider } from "./providers/index.js";
 import { getEffectiveLlmConfig, resolveSourceUser } from "./effectiveConfig.js";
 import { recordUsage } from "./repos/usage.js";
 import { setDossierPending, setDossierReady, setDossierFailed } from "./repos/documents.js";
+import { CRITIQUE_TRIGGERS } from "./questionBank.js";
 
 // Penanda internal: model menyentuh ceiling output sebelum JSON selesai.
 const TRUNCATED = "dossier truncated";
@@ -50,7 +51,9 @@ export interface Dossier {
   poin_serangan: string[];
 }
 
-export const CRITIQUE_TRIGGERS = ["sistem", "kuesioner", "ai", "domain_sensitif"] as const;
+// Nama modul hidup di questionBank.ts — satu sumber, supaya dossier tidak bisa
+// menandai modul yang tidak punya isi.
+export { CRITIQUE_TRIGGERS } from "./questionBank.js";
 
 export function buildDossierSystem(): string {
   return `Anda adalah asisten analis yang membaca naskah skripsi S1 secara menyeluruh dan menghasilkan dossier terstruktur untuk dipakai dosen penguji.
@@ -163,7 +166,7 @@ export function parseDossier(text: string): Dossier {
       jumlah_gambar: int(f?.jumlah_gambar),
     },
     modul_kritik_terpicu: strArray(o?.modul_kritik_terpicu).filter((m) =>
-      (CRITIQUE_TRIGGERS as readonly string[]).includes(m),
+      CRITIQUE_TRIGGERS.includes(m),
     ),
     poin_serangan: strArray(o?.poin_serangan),
   };

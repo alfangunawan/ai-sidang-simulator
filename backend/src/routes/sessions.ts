@@ -7,6 +7,7 @@ import { getEffectiveLlmConfig, resolveSourceUser } from "../effectiveConfig.js"
 import { getActiveDocument, getDossierRow } from "../repos/documents.js";
 import { getChunks } from "../repos/chunks.js";
 import { buildPersona } from "../persona.js";
+import { buildPhaseBlock } from "../questionBank.js";
 import { formatDossier, type Dossier } from "../dossier.js";
 import { retrieve, formatExcerpts, formatChunks } from "../retrieval.js";
 import {
@@ -112,7 +113,14 @@ export function sessionsRouter(
         cfg.attackPoints,
         cfg.examinerType,
       );
-      const dossier = formatDossier(JSON.parse(dossierRow.dossier) as Dossier);
+      const parsedDossier = JSON.parse(dossierRow.dossier) as Dossier;
+      const dossier = formatDossier(parsedDossier);
+      // Blok fase: contoh pertanyaan untuk fase terdekat + modul kritik yang
+      // benar-benar dipicu skripsi ini. Ditaruh setelah blok yang di-cache.
+      const phaseBlock = buildPhaseBlock(
+        countExaminerTurns(db, sessionId),
+        parsedDossier.modul_kritik_terpicu,
+      );
 
       // Kueri retrieval memakai pertanyaan penguji terakhir DAN jawaban
       // mahasiswa: pertanyaannya yang menetapkan topik, jawabannya yang
@@ -127,6 +135,7 @@ export function sessionsRouter(
       const result = await provider.sendTurn({
         persona: personaAttack,
         dossier,
+        phaseBlock,
         history,
         userInput: withNonAnswerNudge(transcript) + formatExcerpts(excerpts),
       });

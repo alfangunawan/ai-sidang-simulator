@@ -600,3 +600,57 @@ Test menguncinya: chunk tentang SUS/responden terpilih, chunk tentang fotosintes
 ### 19.3 Gerbang dossier ikut ke rute close
 
 `POST /sessions/:id/close` kini menolak 400 bila dossier tidak `ready`, sama seperti rute turn. Tanpa itu satu sesi bisa berjalan penuh lalu gagal dinilai di ujung — kegagalan pada titik paling mahal.
+
+---
+
+## 20. Hasil Tahap 5 (2026-07-29)
+
+Terkirim: `CRITIQUE_MODULES` jadi record berkunci, `phaseWindow`, `buildPhaseBlock`, bank pertanyaan keluar dari `buildPersona`, `phaseBlock` terisi di rute turn. Backend **242 lulus**, tsc bersih.
+
+### 20.1 Penghematan jauh lebih kecil dari perkiraan §11
+
+§11 menulis "Hemat ~2,5k token". Persona memang turun **4.724 → 2.477** (−2.247, persis). Tapi sebagian besarnya kembali sebagai blok fase:
+
+| posisi | 0 modul | 2 modul | 4 modul |
+|---|---|---|---|
+| n=0 | 489 | 873 | 1.243 |
+| n=4 | 855 | 1.239 | 1.609 |
+| n=8 | 953 | 1.337 | 1.707 |
+| n≥12 | 407 | 791 | 1.161 |
+
+Neto: **persona + blok fase = 3.814 token** (2 modul, tengah sidang) atau **4.199** (keempat modul terpicu), lawan 4.724 sebelumnya.
+
+**Hemat nyata 525–1.200 token, bukan 2.247.** Sekitar 4–9% anggaran per giliran, bukan 17%. Perkiraan §11 mengabaikan bahwa isi yang dipindahkan sebagian besar tetap harus dikirim.
+
+Yang tidak masuk hitungan token: penguji tidak lagi melihat empat modul kritik ketika skripsinya hanya memicu satu. Itu klaim kedua §11 ("naikkan kepatuhan aturan") dan kemungkinan besar nilainya lebih besar daripada penghematan tokennya — tetapi belum terukur.
+
+### 20.2 Fase ditaksir, bukan diketahui
+
+Tidak ada sumber kebenaran posisi fase: model menjalankan agendanya sendiri dan tidak melaporkan posisinya. `phaseWindow` menaksir dari jumlah giliran penguji (`floor(n / 2)`, kalibrasi 8–15 pertanyaan untuk 7 fase).
+
+Tiga hal menahan risiko taksiran yang meleset:
+
+1. Yang dikirim adalah **jendela 2–3 fase**, bukan satu fase. Meleset satu langkah tetap mengenai.
+2. **Agenda lengkap tetap di persona.** Model selalu tahu ketujuh fase dan urutannya; hanya contoh pertanyaannya yang dipersempit.
+3. Bank pertanyaan memang berlabel "bahan, bukan naskah" — kehilangan contoh untuk satu fase menurunkan mutu pertanyaan sedikit, tidak membuat penguji kehilangan arah.
+
+Jalur upgrade sudah ditulis sebagai komentar `ponytail:` di `phaseWindow`: minta model menempelkan penanda fase seperti `CLOSE_MARKER`, lalu baca posisinya alih-alih menaksir. Mesinnya sudah ada (`stripCloseMarker`).
+
+**Ini satu-satunya komponen menebak di seluruh sistem, dan ia masuk sebelum gerbang §9 pernah diukur.** Bila grounding turun setelah ini, `phaseWindow` adalah tersangka pertama.
+
+### 20.3 Nama modul kini satu sumber
+
+`CRITIQUE_TRIGGERS` pindah ke `questionBank.ts` dan diekspor ulang oleh `dossier.ts`. Sebelumnya daftar nama ada dua kali di dua file — dossier bisa menandai modul yang tidak punya isi, dan tidak ada yang menangkapnya.
+
+### 20.4 Anggaran per giliran sesudah Tahap 5
+
+| Komponen | token |
+|---|---|
+| persona | 2.477 |
+| blok fase (2 modul, n=8) | 1.337 |
+| dossier ~3.500 | 3.500 |
+| kutipan 3 × 1.200 char | 1.629 |
+| history 15 giliran, belum dipangkas | 3.522 |
+| **total** | **12.465** |
+
+Tahap 6 (pemangkasan history) kini jelas menjadi sisa terbesar: 3.522 token, **lebih besar dari seluruh hasil Tahap 5**.

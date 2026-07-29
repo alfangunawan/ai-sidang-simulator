@@ -62,32 +62,72 @@ export const QUESTION_BANK: Record<string, string[]> = {
 };
 
 /**
- * Critique modules that only activate when the skripsi actually matches the
- * trigger. Keeps the simulator generic while still hitting the hard spots for
- * system-development / AI / sensitive-domain theses.
+ * Critique modules, keyed by trigger. Only the modules the dossier actually
+ * flagged are sent — the dossier decides this by reading the whole naskah, so
+ * there is no guessing involved. Sending all four costs 752 tokens every turn
+ * and puts prompts about, say, sensitive-domain ethics in front of an examiner
+ * grading a thesis about warehouse logistics.
  */
-export const CRITIQUE_MODULES = `MODUL KRITIK (aktifkan HANYA jika isi skripsi memenuhi pemicunya):
+export const CRITIQUE_MODULES: Record<string, string> = {
+  sistem: `- Pemicu: skripsi membangun sistem/aplikasi (prototyping, waterfall, RAD, SDLC).
+  Kejar: mengapa model itu dipilih dibanding alternatif; pemisahan metode rekayasa (cara sistem dibangun) dari metode penelitian (cara klaim diuji); jumlah dan isi iterasi; beda skripsi vs proyek pembuatan aplikasi biasa; kecukupan pengujian di luar black-box.`,
 
-- Pemicu: skripsi membangun sistem/aplikasi (prototyping, waterfall, RAD, SDLC).
-  Kejar: mengapa model itu dipilih dibanding alternatif; pemisahan metode rekayasa (cara sistem dibangun) dari metode penelitian (cara klaim diuji); jumlah dan isi iterasi; beda skripsi vs proyek pembuatan aplikasi biasa; kecukupan pengujian di luar black-box.
+  kuesioner: `- Pemicu: evaluasi memakai kuesioner (UAT, SUS, TAM, kepuasan pengguna).
+  Kejar: jumlah dan cara pemilihan responden; bias responden (assumption bias, ingin menyenangkan peneliti); tidak adanya skenario kasus tepi; batas generalisasi. Khusus SUS: skor SUS BUKAN persentase — rata-rata industri 68 (SD 12,5) dan interpretasi memakai curved grading scale Sauro-Lewis; responden di bawah 15–20 orang menghasilkan estimasi tidak presisi sehingga perlu selang kepercayaan.`,
 
-- Pemicu: evaluasi memakai kuesioner (UAT, SUS, TAM, kepuasan pengguna).
-  Kejar: jumlah dan cara pemilihan responden; bias responden (assumption bias, ingin menyenangkan peneliti); tidak adanya skenario kasus tepi; batas generalisasi. Khusus SUS: skor SUS BUKAN persentase — rata-rata industri 68 (SD 12,5) dan interpretasi memakai curved grading scale Sauro-Lewis; responden di bawah 15–20 orang menghasilkan estimasi tidak presisi sehingga perlu selang kepercayaan.
+  ai: `- Pemicu: skripsi memakai AI/LLM/chatbot/model bahasa.
+  Kejar: halusinasi dan inkonsistensi output; cara menjamin keandalan jawaban; ketergantungan pada API pihak ketiga dan risiko model berubah; apakah yang diuji sistemnya atau kemampuan model dasarnya; biaya dan latensi.`,
 
-- Pemicu: skripsi memakai AI/LLM/chatbot/model bahasa.
-  Kejar: halusinasi dan inkonsistensi output; cara menjamin keandalan jawaban; ketergantungan pada API pihak ketiga dan risiko model berubah; apakah yang diuji sistemnya atau kemampuan model dasarnya; biaya dan latensi.
+  domain_sensitif: `- Pemicu: domain sensitif (kesehatan, kesehatan mental, hukum, keuangan, anak).
+  Kejar: alur penanganan situasi darurat/krisis; tanggung jawab hukum dan etis bila sistem memberi saran salah; ada tidaknya validasi ahli/profesional atas isi; keamanan dan privasi data pengguna serta lokasi penyimpanannya; status instrumen (skrining vs diagnosis), kewenangan interpretasi skor, lisensi, dan apakah validasi instrumen itu memang untuk populasi target Anda; ada tidaknya disclaimer bahwa sistem bukan pengganti tenaga profesional; risiko empati semu yang menyesatkan pengguna.`,
+};
 
-- Pemicu: domain sensitif (kesehatan, kesehatan mental, hukum, keuangan, anak).
-  Kejar: alur penanganan situasi darurat/krisis; tanggung jawab hukum dan etis bila sistem memberi saran salah; ada tidaknya validasi ahli/profesional atas isi; keamanan dan privasi data pengguna serta lokasi penyimpanannya; status instrumen (skrining vs diagnosis), kewenangan interpretasi skor, lisensi, dan apakah validasi instrumen itu memang untuk populasi target Anda; ada tidaknya disclaimer bahwa sistem bukan pengganti tenaga profesional; risiko empati semu yang menyesatkan pengguna.`;
+/** Satu-satunya sumber kebenaran nama modul; dossier memvalidasi terhadap ini. */
+export const CRITIQUE_TRIGGERS = Object.keys(CRITIQUE_MODULES);
 
-export function buildQuestionBankBlock(): string {
-  const blocks = SIDANG_PHASES.filter((p) => QUESTION_BANK[p]?.length).map(
+// Kalibrasi persona: 8–15 pertanyaan utama untuk 7 fase.
+const QUESTIONS_PER_PHASE = 2;
+
+/**
+ * ponytail: fase ditaksir dari jumlah giliran penguji, bukan diketahui.
+ * Tidak ada sumber kebenaran — model menjalankan agendanya sendiri dan tidak
+ * melaporkan posisinya. Karena itu yang dikirim adalah JENDELA tiga fase, dan
+ * agenda lengkap tetap ada di persona: taksiran yang meleset satu fase hanya
+ * membuat contoh pertanyaan kurang pas, bukan membuat penguji kehilangan arah.
+ * Upgrade bila terbukti kurang: minta model menempelkan penanda fase seperti
+ * CLOSE_MARKER, lalu baca posisinya alih-alih menaksir.
+ */
+export function phaseWindow(examinerCount: number): string[] {
+  const last = SIDANG_PHASES.length - 1;
+  const center = Math.min(last, Math.floor(examinerCount / QUESTIONS_PER_PHASE));
+  const from = Math.max(0, center - 1);
+  return SIDANG_PHASES.slice(from, Math.min(last, center + 1) + 1);
+}
+
+/**
+ * System blok 2: contoh pertanyaan untuk fase di sekitar posisi sekarang, plus
+ * modul kritik yang dipicu skripsi ini. Berubah beberapa kali per sesi, jadi ia
+ * duduk SESUDAH blok persona+dossier yang di-cache.
+ */
+export function buildPhaseBlock(examinerCount: number, triggered: string[]): string {
+  const phases = phaseWindow(examinerCount).filter((p) => QUESTION_BANK[p]?.length);
+  const blocks = phases.map(
     (p) => `${p}:\n${QUESTION_BANK[p].map((q) => `- ${q}`).join("\n")}`,
   );
-  return `BANK PERTANYAAN (bahan, bukan naskah):
-Ambil dari daftar ini sesuai fase yang sedang berjalan, lalu SESUAIKAN dengan isi skripsi mahasiswa — sebut angka, bab, tabel, atau istilah yang benar-benar ada di naskah. Jangan membacakan pertanyaan apa adanya dan jangan mengulang pertanyaan yang sudah diajukan.
+  const modules = triggered
+    .filter((t) => CRITIQUE_MODULES[t])
+    .map((t) => CRITIQUE_MODULES[t]);
 
-${blocks.join("\n\n")}
+  const parts = [
+    `BANK PERTANYAAN (bahan, bukan naskah) — fase di sekitar posisi sidang sekarang:
+Ambil dari daftar ini, lalu SESUAIKAN dengan isi skripsi mahasiswa — sebut angka, bab, tabel, atau istilah yang benar-benar ada di naskah. Jangan membacakan pertanyaan apa adanya dan jangan mengulang pertanyaan yang sudah diajukan. Agenda lengkap ada di atas; daftar ini hanya contoh untuk fase terdekat.
 
-${CRITIQUE_MODULES}`;
+${blocks.join("\n\n")}`,
+  ];
+  if (modules.length) {
+    parts.push(
+      `MODUL KRITIK (skripsi ini memicunya — wajib disentuh minimal sekali):\n\n${modules.join("\n\n")}`,
+    );
+  }
+  return parts.join("\n\n");
 }

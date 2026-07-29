@@ -1,6 +1,5 @@
 import { CLOSE_MARKER } from "./sidang.js";
 import { SIDANG_PHASES, CORE_PHASES } from "./phases.js";
-import { buildQuestionBankBlock } from "./questionBank.js";
 
 export { SIDANG_PHASES };
 
@@ -145,7 +144,6 @@ export function buildPersona(
     PROBING_RULES,
     DIALOGUE_RULES,
     ESCALATION_RULES,
-    buildQuestionBankBlock(),
     EXAMINER_PHRASES,
     buildAgendaRules(),
   ];

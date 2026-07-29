@@ -118,23 +118,22 @@ describe("persona examiner types", () => {
   });
 });
 
-describe("persona question bank", () => {
-  it("embeds a question from every core phase", () => {
+// Bank pertanyaan dan modul kritik pindah ke blok fase (system blok 2) supaya
+// blok persona+dossier yang di-cache tidak ikut berubah tiap pergantian fase.
+describe("persona excludes the phase block", () => {
+  it("carries neither the question bank nor the critique modules", () => {
     const p = buildPersona("standar", "");
-    for (const phase of ["Metodologi", "Hasil & Pembahasan", "Kesimpulan & Kontribusi"]) {
-      expect(p).toContain(QUESTION_BANK[phase][0]);
+    expect(p).not.toContain(QUESTION_BANK["Metodologi"][0]);
+    expect(p).not.toContain(CRITIQUE_MODULES.kuesioner);
+  });
+
+  // Agenda tetap di persona: model harus selalu tahu ketujuh fase dan urutannya,
+  // meski contoh pertanyaannya hanya untuk fase terdekat.
+  it("still lists the full agenda", () => {
+    const p = buildPersona("standar", "");
+    for (const phase of ["Metodologi", "Hasil & Pembahasan", "Penutup"]) {
+      expect(p).toContain(phase);
     }
-  });
-
-  it("tells the model to adapt rather than read the bank verbatim", () => {
-    expect(buildPersona("standar", "")).toMatch(/Jangan membacakan pertanyaan apa adanya/);
-  });
-
-  it("embeds the conditional critique modules", () => {
-    expect(buildPersona("standar", "")).toContain(CRITIQUE_MODULES);
-    expect(CRITIQUE_MODULES).toMatch(/BUKAN persentase/);
-    expect(CRITIQUE_MODULES).toMatch(/halusinasi/);
-    expect(CRITIQUE_MODULES).toMatch(/krisis/);
   });
 });
 
