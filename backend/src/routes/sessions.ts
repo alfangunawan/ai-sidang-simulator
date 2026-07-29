@@ -4,8 +4,11 @@ import type Database from "better-sqlite3";
 import { getProvider } from "../providers/index.js";
 import { getSetting } from "../repos/settings.js";
 import { getEffectiveLlmConfig, resolveSourceUser } from "../effectiveConfig.js";
-import { getActiveDocument } from "../repos/documents.js";
+import { getActiveDocument, getDossierRow } from "../repos/documents.js";
+import { getChunks } from "../repos/chunks.js";
 import { buildPersona } from "../persona.js";
+import { formatDossier, type Dossier } from "../dossier.js";
+import { retrieve, formatExcerpts } from "../retrieval.js";
 import {
   createSession,
   listSessions,
@@ -84,6 +87,17 @@ export function sessionsRouter(
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
+    const dossierRow = getDossierRow(db, doc.id);
+    // Tidak ada jatuh-balik diam-diam ke full_text: itu menyembunyikan kegagalan
+    // dan mengembalikan biaya 147k token per giliran tanpa user tahu.
+    if (dossierRow?.dossier_status !== "ready" || !dossierRow.dossier) {
+      return res.status(400).json({
+        error:
+          dossierRow?.dossier_status === "pending"
+            ? "Skripsi masih dianalisis — tunggu sebentar lalu coba lagi"
+            : "Dossier skripsi belum siap. Buka Pengaturan untuk membangun ulang.",
+      });
+    }
 
     let userTurnNumber: number | undefined;
     try {
@@ -98,13 +112,24 @@ export function sessionsRouter(
         cfg.attackPoints,
         cfg.examinerType,
       );
-      // The nudge steers the model only; the transcript keeps what was actually said.
-      const result = await provider.sendTurn(
-        personaAttack,
-        doc.full_text,
-        history,
-        withNonAnswerNudge(transcript),
+      const dossier = formatDossier(JSON.parse(dossierRow.dossier) as Dossier);
+
+      // Kueri retrieval memakai pertanyaan penguji terakhir DAN jawaban
+      // mahasiswa: pertanyaannya yang menetapkan topik, jawabannya yang
+      // menentukan bagian naskah mana yang perlu dikonfrontasi.
+      const lastExaminer = [...history].reverse().find((t) => t.role === "examiner");
+      const excerpts = retrieve(
+        getChunks(db, doc.id),
+        `${lastExaminer?.content ?? ""} ${transcript}`,
       );
+
+      // The nudge steers the model only; the transcript keeps what was actually said.
+      const result = await provider.sendTurn({
+        persona: personaAttack,
+        dossier,
+        history,
+        userInput: withNonAnswerNudge(transcript) + formatExcerpts(excerpts),
+      });
 
       // Recorded before the empty-reply guard: the call was billed either way.
       recordUsage(db, userId, resolveSourceUser(db, userId, "ai"), now(), cfg.provider, cfg.model, "turn", result.usage);

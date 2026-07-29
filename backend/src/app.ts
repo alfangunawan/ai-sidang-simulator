@@ -24,7 +24,7 @@ export function buildApp(db: Database.Database, key: Buffer): express.Express {
   const auth = requireAuth(db);
   app.use("/settings", auth, settingsRouter(db, key));
   app.use("/sessions", auth, sessionsRouter(db, key));
-  app.use("/skripsi", auth, skripsiRouter(db));
+  app.use("/skripsi", auth, skripsiRouter(db, key));
   app.use("/tts", auth, ttsRouter(db, key));
   app.use("/stt", auth, sttRouter(db, key));
   app.use("/collab", auth, collabRouter(db));

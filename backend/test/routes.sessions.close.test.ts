@@ -6,6 +6,7 @@ import { buildApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
 import { saveSettings } from "../src/repos/settings.js";
 import { replaceDocument } from "../src/repos/documents.js";
+import { seedDossier } from "./fixtures/dossier.js";
 import { ASSESSMENT_MAX_TOKENS } from "../src/providers/types.js";
 
 afterEach(() => vi.restoreAllMocks());
@@ -30,7 +31,7 @@ async function ready() {
     .send({ username: "tester", password: "password1" });
   const userId = body.user.id;
   saveSettings(db, userId, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
-  replaceDocument(db, userId, "thesis.pdf", "ISI", "2026-01-01T00:00:00Z");
+  seedDossier(db, replaceDocument(db, userId, "thesis.pdf", "ISI", "2026-01-01T00:00:00Z"));
   return agent;
 }
 

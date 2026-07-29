@@ -25,17 +25,22 @@ describe("OpenRouterProvider", () => {
 
     const provider = new OpenRouterProvider("or-key", "anthropic/claude-sonnet-4.6");
     const history: Turn[] = [{ role: "examiner", content: "Q1" }];
-    const result = await provider.sendTurn("PERSONA", "SKRIPSI", history, "A1");
+    const result = await provider.sendTurn({
+      persona: "PERSONA",
+      dossier: "DOSSIER",
+      history,
+      userInput: "A1",
+    });
 
     expect(result.reply).toBe("Tanggapan penguji.");
     expect(captured.url).toContain("openrouter.ai/api/v1/chat/completions");
     expect(captured.body.model).toBe("anthropic/claude-sonnet-4.6");
     expect(captured.body.messages[0]).toEqual({
       role: "system",
-      content: "PERSONA\n\nSKRIPSI",
+      content: "PERSONA\n\nDOSSIER",
     });
     expect(captured.body.messages).toEqual([
-      { role: "system", content: "PERSONA\n\nSKRIPSI" },
+      { role: "system", content: "PERSONA\n\nDOSSIER" },
       { role: "assistant", content: "Q1" },
       { role: "user", content: "A1" },
     ]);
@@ -59,7 +64,7 @@ describe("OpenRouterProvider", () => {
       })) as any,
     );
 
-    const result = await new OpenRouterProvider("k", "x/y").sendTurn("P", "S", [], "A");
+    const result = await new OpenRouterProvider("k", "x/y").sendTurn({ persona: "P", dossier: "D", history: [], userInput: "A" });
     expect(result.usage).toEqual({
       input_tokens: 34000, // prompt_tokens - cached_tokens
       output_tokens: 242,
@@ -78,7 +83,7 @@ describe("OpenRouterProvider", () => {
         json: async () => ({ choices: [{ message: { content: "Tanggapan." } }] }),
       })) as any,
     );
-    const result = await new OpenRouterProvider("k", "x/y").sendTurn("P", "S", [], "A");
+    const result = await new OpenRouterProvider("k", "x/y").sendTurn({ persona: "P", dossier: "D", history: [], userInput: "A" });
     expect(result.usage?.input_tokens).toBe(0);
     expect(result.usage?.cost_usd).toBe(0);
   });
@@ -94,10 +99,10 @@ describe("OpenRouterProvider", () => {
     );
     const provider = new OpenRouterProvider("or-SECRET-key", "x/y");
     await expect(
-      provider.sendTurn("P", "S", [], "hi"),
+      provider.sendTurn({ persona: "P", dossier: "D", history: [], userInput: "hi" }),
     ).rejects.toThrow(/OpenRouter request failed \(401\)/);
     await expect(
-      provider.sendTurn("P", "S", [], "hi"),
+      provider.sendTurn({ persona: "P", dossier: "D", history: [], userInput: "hi" }),
     ).rejects.not.toThrow(/or-SECRET-key/);
   });
 });

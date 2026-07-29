@@ -5,6 +5,7 @@ import { openDb } from "../src/db.js";
 import { buildApp } from "../src/app.js";
 import { getKeyUsageView } from "../src/repos/usage.js";
 import { replaceDocument } from "../src/repos/documents.js";
+import { seedDossier } from "./fixtures/dossier.js";
 
 // Stub the provider so we can observe which apiKey the turn used.
 vi.mock("../src/providers/index.js", () => ({
@@ -44,7 +45,7 @@ describe("member borrows host AI key", () => {
     await member.agent.post("/collab/join").send({ code }).expect(200);
 
     // seed the member's document directly — avoids PDF-upload flakiness
-    replaceDocument(db, member.id, "s.pdf", "isi skripsi", "t");
+    seedDossier(db, replaceDocument(db, member.id, "s.pdf", "isi skripsi", "t"));
 
     const session = await member.agent.post("/sessions").send({}).expect(200);
     const turn = await member.agent

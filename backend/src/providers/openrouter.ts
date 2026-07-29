@@ -4,7 +4,7 @@ import type {
   LLMProvider,
   LLMResult,
   TokenUsage,
-  Turn,
+  TurnContext,
 } from "./types.js";
 import { mapHistory } from "../prompt.js";
 
@@ -44,16 +44,16 @@ export class OpenRouterProvider implements LLMProvider {
     if (!res.ok) throw new Error(`OpenRouter auth failed (${res.status})`);
   }
 
-  async sendTurn(
-    personaAttack: string,
-    skripsi: string,
-    history: Turn[],
-    userInput: string,
-  ): Promise<LLMResult> {
+  async sendTurn(ctx: TurnContext): Promise<LLMResult> {
+    // Stabil di depan, berubah di belakang: persona+dossier, lalu blok fase,
+    // lalu history dan giliran mahasiswa. Z.AI dan DeepSeek meng-cache secara
+    // otomatis berdasar prefix identik, jadi urutan inilah yang menentukan
+    // apakah cache kena sama sekali.
+    const system = [ctx.persona, ctx.dossier, ctx.phaseBlock].filter(Boolean).join("\n\n");
     const messages = [
-      { role: "system" as const, content: `${personaAttack}\n\n${skripsi}` },
-      ...mapHistory(history),
-      { role: "user" as const, content: userInput },
+      { role: "system" as const, content: system },
+      ...mapHistory(ctx.history),
+      { role: "user" as const, content: ctx.userInput },
     ];
 
     const res = await fetch(ENDPOINT, {

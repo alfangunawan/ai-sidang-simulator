@@ -467,3 +467,71 @@ Pola dikeraskan jadi `/^\d+\.\d+(\.\d+)*\.?\s+[A-Z]/` — kata sesudah nomor waj
 - `getActiveDocument` kini mengembalikan `id`; `replaceDocument` mengembalikan `lastInsertRowid`. Dossier menggantung pada id yang sama.
 - Menghapus/mengganti dokumen ikut menghapus chunk lewat `ON DELETE CASCADE` (`foreign_keys` sudah `ON` di `openDb`).
 - `POST /skripsi` kini mengembalikan `chunk_count` — dipakai UI Tahap 3 untuk membedakan "PDF terbaca tapi tidak menghasilkan chunk" dari "dossier belum jadi".
+
+---
+
+## 17. Hasil Tahap 2 (2026-07-29)
+
+Terkirim: `src/dossier.ts`, `src/retrieval.ts`, `src/sastrawijs.d.ts`, kolom dossier di `documents`, kontrak `TurnContext`, kedua provider, `routes/skripsi.ts` (+`POST /skripsi/dossier/rebuild`), `routes/sessions.ts`. Suite penuh **223 lulus, 0 gagal**. Dependency baru: `sastrawijs` (929 KB).
+
+### 17.1 Anggaran token tercapai
+
+| Komponen | token |
+|---|---|
+| persona | 4.724 |
+| dossier (fixture contoh) | 395 |
+| kutipan 3 × 1.200 char | 1.629 |
+| history 15 giliran, belum dipangkas | 3.522 |
+| **total** | **10.270** |
+| sebelum (terukur) | 147.000 |
+
+**Turun 14,3×.** Target ≤15k dan sasaran ~12k terpenuhi.
+
+Dua koreksi terhadap perkiraan §15.2:
+
+- Dossier fixture hanya 395 token karena isinya contoh. Dossier nyata akan mendekati batas 3.500 yang dipasang di prompt, sehingga total realistis **~12.900** — masih di bawah ambang, tapi jauh lebih rapat dari angka di tabel ini.
+- History 15 giliran ternyata **3.522 token**, bukan ~1.500 seperti diperkirakan. **Tahap 6 (pemangkasan history) karena itu bukan "hasil terkecil"** seperti tertulis di §11; ia menyumbang lebih besar daripada Tahap 5.
+
+### 17.2 Cache index retrieval dihapus, bukan diperbaiki
+
+Rancangan awal meng-cache index BM25 per `documentId`. Test menangkapnya sebagai kutipan yang tidak pernah muncul: tiap test memakai DB `:memory:` baru, `documentId` mulai dari 1 lagi, dan cache tingkat-modul menyajikan index basi dari test sebelumnya.
+
+Pengukuran menjawab apakah cache itu layak diperbaiki (400 chunk × 180 kata):
+
+```
+buildIndex pertama : 29,5 ms
+buildIndex ulang   : 10,1 ms   (stem cache panas)
+search             :  0,39 ms
+```
+
+10 ms pada giliran yang sudah menunggu STT dan LLM berdetik-detik. Cache index dihapus seluruhnya; cache stemmer — yang mengerjakan 2/3 biayanya — tetap. Menghapus keadaan yang bisa basi lebih murah daripada mengunci ulang kuncinya.
+
+### 17.3 Sastrawi terbukti perlu
+
+```
+menggunakan  -> guna      pengumpulan  -> kumpul
+dikembangkan -> kembang   pengujian    -> uji
+kecemasan    -> cemas     menguji      -> uji
+```
+
+Test mengunci perilaku yang jadi alasan keputusan #2: kueri "bagaimana Anda menguji" menemukan chunk berisi "Pengujian", dan "apa yang Anda bangun" menemukan "dibangun".
+
+Paket mengirim `dist/index.d.ts` tetapi tidak memetakannya di `exports` package.json, jadi TypeScript tidak menemukannya — `src/sastrawijs.d.ts` menambalnya.
+
+### 17.4 Kata perintah penguji wajib jadi stopword
+
+IDF dihitung atas isi skripsi. Kata seperti "jelaskan", "sebutkan", "tunjukkan" hampir tidak pernah muncul di naskah, sehingga IDF-nya tinggi dan kueri justru didominasi kata perintah alih-alih istilah yang dicari. Daftar stopword memuat keduanya: kata fungsi dan kata perintah penguji.
+
+### 17.5 Hitungan struktural tidak dipercaya dari model
+
+`parseDossier` menurunkan `jumlah_rumusan_masalah` dan `jumlah_kesimpulan` dari panjang array yang sudah terparse, bukan dari angka yang ditulis model. Model kerap menyebut "5 rumusan masalah" lalu mendaftar 3 — dan pertanyaan "apakah jumlahnya sama dengan kesimpulan?" justru bergantung pada angka itu.
+
+### 17.6 Tidak ada jatuh-balik ke `full_text`
+
+`POST /sessions/:id/turn` mengembalikan 400 bila `dossier_status ≠ 'ready'`, dengan pesan berbeda untuk `pending` dan `failed`. Jatuh-balik diam-diam ke naskah utuh akan menyembunyikan kegagalan sekaligus mengembalikan biaya 147k token per giliran tanpa user tahu.
+
+### 17.7 Belum diverifikasi
+
+- **Dossier nyata belum pernah dibangun.** Semua test memakai fixture. Ukuran, kualitas kutipan verbatim, dan ketepatan `poin_serangan` baru terbukti setelah satu skripsi asli diunggah.
+- **Grounding belum diukur ulang.** Gerbang §9 (≥81,8%) masih terbuka; butuh sesi nyata dengan `scripts/grounding.ts`.
+- `phaseBlock` sudah ada di kontrak tetapi belum diisi — itu Tahap 5.

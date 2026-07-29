@@ -5,7 +5,7 @@ import type {
   LLMProvider,
   LLMResult,
   TokenUsage,
-  Turn,
+  TurnContext,
 } from "./types.js";
 
 // Anthropic bills cache reads/writes separately from plain input; cost is not
@@ -35,22 +35,26 @@ export class ClaudeProvider implements LLMProvider {
     await this.client.models.list();
   }
 
-  async sendTurn(
-    personaAttack: string,
-    skripsi: string,
-    history: Turn[],
-    userInput: string,
-  ): Promise<LLMResult> {
+  async sendTurn(ctx: TurnContext): Promise<LLMResult> {
+    // Blok 1 = persona + dossier, statis sepanjang sesi; breakpoint cache di
+    // ujungnya. Blok 2 = fase aktif, berubah beberapa kali per sesi dan sengaja
+    // tidak di-cache supaya tidak membatalkan blok 1.
+    const system: { type: "text"; text: string; cache_control?: { type: "ephemeral" } }[] = [
+      {
+        type: "text",
+        text: `${ctx.persona}\n\n${ctx.dossier}`,
+        cache_control: { type: "ephemeral" },
+      },
+    ];
+    if (ctx.phaseBlock) system.push({ type: "text", text: ctx.phaseBlock });
+
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: TURN_MAX_TOKENS,
-      system: [
-        { type: "text", text: personaAttack, cache_control: { type: "ephemeral" } },
-        { type: "text", text: skripsi, cache_control: { type: "ephemeral" } },
-      ],
+      system,
       messages: [
-        ...mapHistory(history),
-        { role: "user", content: userInput },
+        ...mapHistory(ctx.history),
+        { role: "user", content: ctx.userInput },
       ],
     });
 

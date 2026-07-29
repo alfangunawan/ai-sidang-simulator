@@ -47,13 +47,26 @@ export interface GenerateResult {
   truncated?: boolean;
 }
 
+/**
+ * Susunan konteks satu giliran. Urutan fieldnya bukan estetika: prefix yang
+ * stabil harus di depan supaya cache penyedia bisa kena.
+ *
+ * `persona` + `dossier` tidak berubah sepanjang sesi. `phaseBlock` berubah
+ * ~6x per sesi, jadi ia duduk SESUDAH keduanya — kalau di depan, tiap
+ * pergantian fase membatalkan cache seluruh prefix. `userInput` sudah memuat
+ * nudge dan kutipan retrieval, dan sengaja berada di messages, bukan system:
+ * kutipan berganti tiap giliran dan akan mematikan cache bila ikut ke system.
+ */
+export interface TurnContext {
+  persona: string;
+  dossier: string;
+  phaseBlock?: string;
+  history: Turn[];
+  userInput: string;
+}
+
 export interface LLMProvider {
-  sendTurn(
-    personaAttack: string,
-    skripsi: string,
-    history: Turn[],
-    userInput: string,
-  ): Promise<LLMResult>;
+  sendTurn(ctx: TurnContext): Promise<LLMResult>;
   generate(system: string, user: string, maxTokens: number): Promise<GenerateResult>;
   // Lightweight auth/connection check. Resolves on success, throws on failure.
   checkAuth(): Promise<void>;

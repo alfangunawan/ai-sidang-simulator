@@ -1,8 +1,9 @@
 import type Database from "better-sqlite3";
 import type { TokenUsage } from "../providers/types.js";
 
-// What produced the call: an examiner turn, or the end-of-sidang assessment.
-export type UsageKind = "turn" | "assessment";
+// What produced the call: an examiner turn, the end-of-sidang assessment, or
+// the one-off dossier build that runs when a document is uploaded.
+export type UsageKind = "turn" | "assessment" | "dossier";
 
 export interface UsageTotals {
   input_tokens: number;

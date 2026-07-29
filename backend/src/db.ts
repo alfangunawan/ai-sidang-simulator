@@ -121,6 +121,11 @@ export function openDb(path: string): Database.Database {
   addColumnIfMissing(db, "sessions", "close_declined_turn", "close_declined_turn INTEGER");
   addColumnIfMissing(db, "sessions", "user_id", "user_id INTEGER");
   addColumnIfMissing(db, "documents", "user_id", "user_id INTEGER");
+  addColumnIfMissing(db, "documents", "dossier", "dossier TEXT");
+  addColumnIfMissing(db, "documents", "dossier_status", "dossier_status TEXT");
+  addColumnIfMissing(db, "documents", "dossier_error", "dossier_error TEXT");
+  addColumnIfMissing(db, "documents", "dossier_version", "dossier_version INTEGER");
+  addColumnIfMissing(db, "documents", "dossier_model", "dossier_model TEXT");
   addColumnIfMissing(db, "usage_events", "user_id", "user_id INTEGER");
   addColumnIfMissing(db, "usage_events", "key_owner_user_id", "key_owner_user_id INTEGER");
   return db;

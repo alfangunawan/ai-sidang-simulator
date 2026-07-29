@@ -41,3 +41,50 @@ export function replaceDocument(
 export function deleteDocument(db: Database.Database, userId: number): void {
   db.prepare("DELETE FROM documents WHERE user_id = ?").run(userId);
 }
+
+export type DossierStatus = "pending" | "ready" | "failed";
+
+export interface DossierRow {
+  dossier: string | null;
+  dossier_status: DossierStatus | null;
+  dossier_error: string | null;
+  dossier_version: number | null;
+  dossier_model: string | null;
+}
+
+export function getDossierRow(db: Database.Database, documentId: number): DossierRow | null {
+  const row = db
+    .prepare(
+      "SELECT dossier, dossier_status, dossier_error, dossier_version, dossier_model FROM documents WHERE id = ?",
+    )
+    .get(documentId) as DossierRow | undefined;
+  return row ?? null;
+}
+
+export function setDossierPending(db: Database.Database, documentId: number): void {
+  db.prepare(
+    "UPDATE documents SET dossier_status = 'pending', dossier_error = NULL WHERE id = ?",
+  ).run(documentId);
+}
+
+export function setDossierReady(
+  db: Database.Database,
+  documentId: number,
+  json: string,
+  version: number,
+  model: string,
+): void {
+  db.prepare(
+    "UPDATE documents SET dossier = ?, dossier_status = 'ready', dossier_error = NULL, dossier_version = ?, dossier_model = ? WHERE id = ?",
+  ).run(json, version, model, documentId);
+}
+
+export function setDossierFailed(
+  db: Database.Database,
+  documentId: number,
+  error: string,
+): void {
+  db.prepare(
+    "UPDATE documents SET dossier_status = 'failed', dossier_error = ? WHERE id = ?",
+  ).run(error, documentId);
+}
