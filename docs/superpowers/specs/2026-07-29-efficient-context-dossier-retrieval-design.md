@@ -77,7 +77,7 @@ Riset "Context Rot" (Chroma, Juli 2025, 18 model frontier) menunjukkan performa 
 | 5 | Pertanyaan global/agregatif ditangani **precomputed structural facts** di dossier | GraphRAG/RAPTOR berlebihan untuk satu dokumen |
 | 6 | Dossier dibangun dengan model **terkuat** yang terjangkau | Sekali per dokumen, teramortisasi; kualitasnya menentukan semua sesi berikutnya |
 | 7 | Dossier **bisa dilihat & diedit user** | Satu-satunya jalan perbaikan bila dossier meleset |
-| 8 | Caching **ditunda** ke Tahap 3 | Setelah dossier, prefix stabil tinggal ~5–8k; hemat marginal |
+| 8 | Caching **ditunda** ke Tahap 7 (§11) | Setelah dossier, prefix stabil tinggal ~5–8k; hemat marginal |
 | 9 | `reasoning effort` tetap penuh untuk turn | Hemat 1,5%, korbannya eksekusi 8 butir `PROBING_RULES` |
 
 ---
@@ -322,7 +322,7 @@ Baris **Grounding** adalah gerbangnya. Kalau turun, retrieval-nya yang salah (bi
 
 | Tahap | Isi | Alasan urutan |
 |---|---|---|
-| 0 | Ukur `buildPersona(...).length`; catat baseline grounding & token | Kalau persona ternyata 8k, prioritas berubah. Lima menit |
+| 0 | ~~Ukur `buildPersona(...).length`; catat baseline grounding & token~~ **SELESAI — hasil di §15** | Kalau persona ternyata 8k, prioritas berubah. Lima menit |
 | 1 | `mergePages: false` + `chunker.ts` + tabel `chunks` | Prasyarat; tanpa ini nomor halaman mustahil |
 | 2 | `dossier.ts` + `retrieval.ts` + ubah kontrak provider + `routes/sessions.ts` | **Satu tahap, jangan dipisah.** Dossier tanpa retrieval melumpuhkan `PROBING_RULES` butir 2 & 3 |
 | 3 | UI dossier di SettingsPage | Jalan perbaikan bila dossier meleset |
@@ -359,3 +359,62 @@ Embedding & vector DB, GraphRAG/RAPTOR, LangChain/LlamaIndex, keep-alive ping ca
 Semua estimasi biaya adalah **perkiraan** dengan asumsi ~12k token/giliran dan harga GLM 5.2 di OpenRouter ($0,70/M input, $2,20/M output) per Juli 2026. Harga dan TTL cache berubah cepat — verifikasi ulang dari field `usage` nyata setelah implementasi, jangan percaya tabel ini sebagai fakta permanen.
 
 TTL dan minimum prefix cache Z.AI/GLM **tidak dipublikasikan resmi**; jangan mengimpor angka Anthropic. Verifikasi lewat `prompt_tokens_details.cached_tokens` pada respons.
+
+---
+
+## 15. Hasil Tahap 0 (2026-07-29)
+
+Rasio konversi yang dipakai: **2,3 char/token**, diturunkan dari `usage_events` nyata (332.670 char → 147k token prompt dikurangi persona).
+
+### 15.1 Persona jauh lebih besar dari dugaan
+
+`buildPersona("standar", "", "umum")` = **10.866 char ≈ 4.724 token** — bukan ~1,4k seperti perkiraan awal. Di bawah ambang 8k yang akan mengubah prioritas, jadi urutan §11 tetap berlaku.
+
+| Blok | char | token |
+|---|---|---|
+| `PERSONA_TONE` | 715 | 311 |
+| tone mode (`standar`) | 90 | 39 |
+| focus tipe (`umum`) | 205 | 89 |
+| `PROBING_RULES` | 1.272 | 553 |
+| `DIALOGUE_RULES` | 1.238 | 538 |
+| `ESCALATION_RULES` | 557 | 242 |
+| **bank pertanyaan (tanpa modul)** | **3.438** | **1.495** |
+| **`CRITIQUE_MODULES`** | **1.730** | **752** |
+| `EXAMINER_PHRASES` | 383 | 167 |
+| `buildAgendaRules()` | 1.222 | 531 |
+| **total** | **10.866** | **4.724** |
+| `buildAssessmentSystem()` | 1.590 | 691 |
+
+**Temuan yang mengubah rencana:** bank pertanyaan + modul kritik = **2.247 token, 48% dari persona**, dan keduanya dikirim utuh setiap giliran meski hanya satu fase yang aktif dan hanya sebagian modul yang terpicu. Itu persis sasaran Tahap 5.
+
+Konsekuensi: **Tahap 5 bukan opsional.** §11 menempatkannya di urutan kelima dengan alasan "hemat ~2,5k token" — angka itu terkonfirmasi (2.247), tapi bobotnya lebih besar dari yang tersirat karena persona ternyata memakan ~40% anggaran 12k.
+
+### 15.2 Anggaran token per giliran, angka nyata
+
+| Komponen | Setelah Tahap 2 | Setelah Tahap 5 |
+|---|---|---|
+| persona | 4.724 | ~2.900 |
+| dossier | ~3.000 | ~3.000 |
+| kutipan retrieval (3 × 1.200 char) | ~1.565 | ~1.565 |
+| history dipangkas (§7.2) | ~1.500 | ~1.500 |
+| **total** | **~10.800** | **~9.000** |
+
+Target ≤15k dan sasaran ~12k terpenuhi di kedua kolom. Slack tipis: kalau dossier meleset ke 5k, Tahap 2 mendarat di ~12,8k — masih lolos ambang, tapi tanpa ruang untuk history yang panjang. **Batasi dossier ≤3.500 token saat menulis prompt pembangunnya.**
+
+### 15.3 Baseline grounding
+
+Diukur dengan `backend/scripts/grounding.ts` atas giliran penguji yang sudah tersimpan di SQLite (arsitektur full-text lama).
+
+| | sesi acuan `96d30908` | semua sesi |
+|---|---|---|
+| giliran penguji | 11 | 17 |
+| menyebut lokasi (bab/hlm/tabel/gambar) | 5 | 8 |
+| menyebut angka naskah | 8 | 9 |
+| **tertambat (gabungan)** | **9 — 81,8%** | **13 — 76,5%** |
+| konfrontasi bertambat | 2 — 18,2% | 4 — 23,5% |
+
+**Gerbang §9: grounding sesudah harus ≥ 81,8%** pada sesi acuan. Ini bar yang tinggi — konteks full-text memang menambatkan dengan baik, dan itulah yang harus disamai, bukan dilampaui.
+
+Satu keputusan pengukuran yang penting: **tuntutan generik seperti "di halaman berapa?" tidak dihitung tertambat.** Kalimat itu bisa diucapkan model yang tidak membaca naskah sama sekali; hanya rujukan konkret ("Tabel IV-1 pada halaman 62") yang dihitung. Tanpa pembedaan ini, model buta konteks mendapat skor sama dan gerbangnya jadi tidak berarti. Self-check di skrip mengunci perilaku ini.
+
+Sampel 11 giliran itu kecil. Sebelum Tahap 2, jalankan satu sesi baseline penuh (15 giliran, jawaban skrip) supaya perbandingan sesudah punya dasar yang layak.
