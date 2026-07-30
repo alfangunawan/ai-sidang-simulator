@@ -40,6 +40,11 @@ interface Props {
 
 export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStart }: Props) {
   const [pending, setPending] = useState<Persona>(initial ?? DEFAULT_PERSONA);
+  // Opened straight at step 2 (the Kesiapan card's mic test) the dialog is only a
+  // mic test: backing out closes it instead of dropping the student into an
+  // examiner picker they never asked for. The modal is unmounted when closed, so
+  // its first step is its entry point.
+  const [micOnly] = useState(step === 2);
   const [testing, setTesting] = useState(false);
   const audio = useAudioLevel(testing);
   const peak = useRef(0);
@@ -77,13 +82,17 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
       <div className="modal sheet">
         <div className="sheet-head">
           <div className="sheet-title">
-            <span className="eyebrow">Langkah {step} dari 2</span>
+            <span className="eyebrow">
+              {micOnly ? "Kesiapan" : `Langkah ${step} dari 2`}
+            </span>
             <h3>{step === 1 ? "Pilih dosen penguji Anda" : "Cek kesiapan Anda"}</h3>
           </div>
-          <div className="sheet-dots" aria-hidden="true">
-            <i className="on" />
-            <i className={step === 2 ? "on" : ""} />
-          </div>
+          {!micOnly && (
+            <div className="sheet-dots" aria-hidden="true">
+              <i className="on" />
+              <i className={step === 2 ? "on" : ""} />
+            </div>
+          )}
           <button className="ghost sheet-x" aria-label="Tutup" onClick={() => onStep(0)}>
             ✕
           </button>
@@ -193,21 +202,31 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
 
         <div className="sheet-foot">
           <span className="sheet-note">
-            {step === 1
-              ? "Penguji terkunci sampai sidang selesai."
-              : `Penguji: ${pending.name}`}
+            {micOnly
+              ? "Tes ini tidak memulai sidang."
+              : step === 1
+                ? "Penguji terkunci sampai sidang selesai."
+                : `Penguji: ${pending.name}`}
           </span>
           <div className="sheet-actions">
-            <button onClick={() => onStep(step === 2 ? 1 : 0)}>
-              {step === 1 ? "Batal" : "Kembali"}
-            </button>
-            <button
-              className="primary"
-              disabled={starting}
-              onClick={() => (step === 1 ? onStep(2) : onStart(pending))}
-            >
-              {step === 1 ? "Lanjut" : starting ? "Menyiapkan…" : "Mulai Sidang"}
-            </button>
+            {micOnly ? (
+              <button className="primary" onClick={() => onStep(0)}>
+                Tutup
+              </button>
+            ) : (
+              <>
+                <button onClick={() => onStep(step === 2 ? 1 : 0)}>
+                  {step === 1 ? "Batal" : "Kembali"}
+                </button>
+                <button
+                  className="primary"
+                  disabled={starting}
+                  onClick={() => (step === 1 ? onStep(2) : onStart(pending))}
+                >
+                  {step === 1 ? "Lanjut" : starting ? "Menyiapkan…" : "Mulai Sidang"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

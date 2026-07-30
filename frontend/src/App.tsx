@@ -11,11 +11,13 @@ import { ResultPage } from "./pages/ResultPage.js";
 import { AuthPage } from "./pages/AuthPage.js";
 import { LandingPage } from "./pages/LandingPage.js";
 import { SetupModal, type MicState } from "./components/SetupModal.js";
+import { SkripsiModal } from "./components/SkripsiModal.js";
 import { DEFAULT_PERSONA, personaFor } from "./personas.js";
 import type { Persona } from "./personas.js";
 import {
   getResult,
   getSettings,
+  getSkripsi,
   saveSettings,
   me,
   logout,
@@ -41,6 +43,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [setup, setSetup] = useState<0 | 1 | 2>(0);
+  const [needSkripsi, setNeedSkripsi] = useState(false);
   const [persona, setPersona] = useState<Persona>(DEFAULT_PERSONA);
   const [mic, setMic] = useState<MicState>("idle");
   const [starting, setStarting] = useState(false);
@@ -63,8 +66,15 @@ export default function App() {
       .catch(() => {});
   }, [user]);
 
-  function openSetup(step: 1 | 2 = 1) {
+  // Every road into a sidang goes through here, so the missing-naskah blocker is
+  // asked once, at the door — not at the student's first recording, when the
+  // sitting has already begun.
+  async function openSetup(step: 1 | 2 = 1) {
     setResumable(hasStoredSession());
+    if (step === 1 && !(await getSkripsi().catch(() => null))) {
+      setNeedSkripsi(true);
+      return;
+    }
     setSetup(step);
   }
 
@@ -207,6 +217,16 @@ export default function App() {
 
         {tab === "pengaturan" && <SettingsPage />}
       </main>
+
+      {needSkripsi && (
+        <SkripsiModal
+          onClose={() => setNeedSkripsi(false)}
+          onReady={() => {
+            setNeedSkripsi(false);
+            setSetup(1);
+          }}
+        />
+      )}
 
       {setup !== 0 && (
         <SetupModal
