@@ -2,7 +2,7 @@ import { useState } from "react";
 import { login, register } from "../api.js";
 import type { User } from "../types.js";
 
-export function AuthPage({ onAuthed }: { onAuthed: (u: User) => void }) {
+export function AuthPage({ onAuthed, onBack }: { onAuthed: (u: User) => void; onBack?: () => void }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -46,6 +46,11 @@ export function AuthPage({ onAuthed }: { onAuthed: (u: User) => void }) {
             <button type="button" className="linklike" onClick={() => setMode("login")}>Sudah punya akun? Masuk</button>
           )}
         </p>
+        {onBack && (
+          <p className="auth-switch">
+            <button type="button" className="linklike" onClick={onBack}>← Kembali ke beranda</button>
+          </p>
+        )}
       </form>
     </div>
   );
