@@ -4,18 +4,7 @@ import type { SessionSummary, Turn } from "../types.js";
 import { Transcript } from "../components/Transcript.js";
 import { ConfirmModal } from "../components/ConfirmModal.js";
 import { turnsToCsv, downloadCsv } from "../lib/csv.js";
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatDate, scoreTone } from "../lib/sessions.js";
 
 function exportSession(s: SessionSummary, turns: Turn[]): void {
   const slug = s.created_at.slice(0, 16).replace(/[:T]/g, "-");
@@ -34,14 +23,14 @@ function bucketOf(iso: string): string {
 
 const BUCKETS = ["Hari ini", "Minggu ini", "Lebih lama"];
 
-function scoreTone(score: number | null): string {
-  if (score == null) return "";
-  if (score >= 75) return "good";
-  if (score >= 60) return "mid";
-  return "low";
+interface Props {
+  onOpenResult: (id: string) => void;
+  /** Session Beranda asked to open straight into, consumed once on load. */
+  openId?: string | null;
+  onOpened?: () => void;
 }
 
-export function HistoryPage({ onOpenResult }: { onOpenResult: (id: string) => void }) {
+export function HistoryPage({ onOpenResult, openId, onOpened }: Props) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selected, setSelected] = useState<SessionSummary | null>(null);
   const [detailTurns, setDetailTurns] = useState<Turn[]>([]);
@@ -55,6 +44,16 @@ export function HistoryPage({ onOpenResult }: { onOpenResult: (id: string) => vo
       .then(setSessions)
       .catch((e) => setErr((e as Error).message));
   }, []);
+
+  // "Buka" on Beranda lands here; the row it points at only exists once the
+  // list has loaded, so the request is held until then.
+  useEffect(() => {
+    if (!openId) return;
+    const hit = sessions.find((s) => s.id === openId);
+    if (!hit) return;
+    onOpened?.();
+    open(hit);
+  }, [openId, sessions]);
 
   const stats = useMemo(() => {
     const scored = sessions.filter((s) => s.final_score != null);

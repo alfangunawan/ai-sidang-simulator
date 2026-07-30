@@ -4,11 +4,12 @@ import {
   getTurns,
   postTurn,
   getSettings,
-  saveSettings,
   closeSession,
   continueSession,
 } from "../api.js";
-import type { Turn, ExaminerMode, ExaminerType, Assessment } from "../types.js";
+import type { Turn, Assessment } from "../types.js";
+import { personaFor, DEFAULT_PERSONA, MODE_LABELS } from "../personas.js";
+import type { Persona } from "../personas.js";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition.js";
 import { useSpeechSynthesis } from "../hooks/useSpeechSynthesis.js";
 import { useAudioLevel } from "../hooks/useAudioLevel.js";
@@ -23,6 +24,16 @@ export const SESSION_KEY = "sibiru_session_id";
 // same count instead of restarting it — and so it stays at 0:00 until the
 // student actually begins.
 const START_KEY = "sibiru_session_started_at";
+
+/** Forget the current sitting so the next mount opens a brand-new session. */
+export function clearStoredSession(): void {
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(START_KEY);
+}
+
+export function hasStoredSession(): boolean {
+  return localStorage.getItem(SESSION_KEY) !== null;
+}
 
 function loadStart(id: string): number | null {
   try {
@@ -47,16 +58,19 @@ function clock(secs: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void }) {
+interface Props {
+  onClosed: (a: Assessment) => void;
+  /** "Sesi Baru" hands the student back to the persona picker, not a silent reset. */
+  onNewSession: () => void;
+}
+
+export function SessionPage({ onClosed, onNewSession }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [manual, setManual] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [modes, setModes] = useState<ExaminerMode[]>([]);
-  const [mode, setMode] = useState<string>("standar");
-  const [types, setTypes] = useState<ExaminerType[]>([]);
-  const [type, setType] = useState<string>("umum");
+  const [persona, setPersona] = useState<Persona>(DEFAULT_PERSONA);
   const [ttsProvider, setTtsProvider] = useState<string>("browser");
   const [sttProvider, setSttProvider] = useState<string>("browser");
   const [closeOpen, setCloseOpen] = useState(false);
@@ -101,14 +115,12 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
     })();
   }, []);
 
-  // load examiner modes/types + current selection from settings
+  // The examiner is chosen once, in the setup dialog, and only read back here:
+  // the persona is the saved mode/type pair wearing a name.
   useEffect(() => {
     getSettings()
       .then((s) => {
-        setModes(s.examiner_modes);
-        setMode(s.examiner_mode);
-        setTypes(s.examiner_types ?? []);
-        setType(s.examiner_type ?? "umum");
+        setPersona(personaFor(s.examiner_mode, s.examiner_type ?? "umum"));
         setTtsProvider(s.effective_tts_provider ?? s.tts_provider);
         setSttProvider(s.effective_stt_provider ?? s.stt_provider ?? "browser");
       })
@@ -176,24 +188,6 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
   const questionCount = turns.filter((t) => t.role === "examiner").length;
   const answerCount = turns.length - questionCount;
 
-  async function onModeChange(next: string) {
-    setMode(next);
-    try {
-      await saveSettings({ examiner_mode: next });
-    } catch (e) {
-      setErr((e as Error).message);
-    }
-  }
-
-  async function onTypeChange(next: string) {
-    setType(next);
-    try {
-      await saveSettings({ examiner_type: next });
-    } catch (e) {
-      setErr((e as Error).message);
-    }
-  }
-
   async function send() {
     if (!sessionId || !pending.trim() || busy) return;
     if (stt.listening) stt.stop();
@@ -218,23 +212,12 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
     }
   }
 
-  // Start a fresh session. The old one is kept (it lives in Riwayat) — this does
-  // not delete anything.
-  async function newSession() {
-    try {
-      const fresh = await createSession();
-      localStorage.setItem(SESSION_KEY, fresh);
-      localStorage.removeItem(START_KEY);
-      setSessionId(fresh);
-      setTurns([]);
-      setStartedAt(null);
-      setManual("");
-      setProposeClose(false);
-      stt.reset();
-      tts.cancel();
-    } catch (e) {
-      setErr((e as Error).message);
-    }
+  // Back to the persona picker. The old session is kept (it lives in Riwayat)
+  // — a fresh one is only created once a new examiner is confirmed.
+  function newSession() {
+    stt.reset();
+    tts.cancel();
+    onNewSession();
   }
 
   function askClose() {
@@ -266,8 +249,7 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
     setErr(null);
     try {
       const assessment = await closeSession(sessionId);
-      localStorage.removeItem(SESSION_KEY);
-      localStorage.removeItem(START_KEY);
+      clearStoredSession();
       tts.cancel();
       setCloseOpen(false);
       setProposeClose(false);
@@ -300,11 +282,29 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
         : vizState === "listening"
           ? "Merekam"
           : "Siap";
-  const modeLabel = modes.find((m) => m.value === mode)?.label ?? mode;
-  const typeLabel = types.find((t) => t.value === type)?.label ?? type;
+  const personaLabel = `${persona.role} · mode ${MODE_LABELS[persona.mode] ?? persona.mode}`;
+
+  // Blockers (no PDF uploaded, API key missing, mic failure) are announced up
+  // top — at the bottom of the page they went unread while the student waited
+  // for a reply that was never coming.
+  const alerts: { key: string; tone: "danger" | "warn"; icon: string; text: string }[] = [];
+  if (err) alerts.push({ key: "err", tone: "danger", icon: "!", text: err });
+  if (stt.error) alerts.push({ key: "stt", tone: "danger", icon: "🎙️", text: stt.error });
+  if (tts.error) alerts.push({ key: "tts", tone: "warn", icon: "🔇", text: tts.error });
 
   return (
     <div>
+      {alerts.length > 0 && (
+        <div className="alerts" role="alert" aria-live="assertive">
+          {alerts.map((a) => (
+            <div key={a.key} className={`alert ${a.tone}`}>
+              <span className="alert-icon" aria-hidden="true">{a.icon}</span>
+              <p>{a.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="page-head">
         <div>
           <h2>Latihan Sidang</h2>
@@ -313,28 +313,9 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
             catatan perbaikan disusun otomatis di akhir sesi.
           </p>
         </div>
-        <div className="head-tools">
-          <label className="field-mini">
-            <span>Mode penguji</span>
-            <select value={mode} onChange={(e) => onModeChange(e.target.value)}>
-              {modes.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field-mini">
-            <span>Tipe penguji</span>
-            <select value={type} onChange={(e) => onTypeChange(e.target.value)}>
-              {types.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <span className="head-note">
+          Penguji terkunci selama sidang berjalan — ganti lewat Sesi Baru.
+        </span>
       </div>
 
       <div className="split">
@@ -342,13 +323,13 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
           <header className="convo-head">
             <div className="avatar-wrap">
               {vizState === "speaking" && <span className="avatar-ring" />}
-              <div className="avatar" aria-hidden="true">P</div>
+              <div className="avatar" style={{ background: persona.color }} aria-hidden="true">
+                {persona.initials}
+              </div>
             </div>
             <div className="convo-who">
-              <span className="convo-name">Penguji</span>
-              <span className="convo-role">
-                {modeLabel} · {typeLabel}
-              </span>
+              <span className="convo-name">{persona.name}</span>
+              <span className="convo-role">{personaLabel}</span>
             </div>
             <div className="head-actions">
               <span className={`live ${tts.preparing ? "speaking" : vizState}`}>
@@ -370,11 +351,17 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
                 </p>
               </div>
             ) : (
-              <Transcript turns={turns} />
+              <Transcript turns={turns} persona={persona} />
             )}
             {busy && (
               <div className="turn examiner">
-                <div className="turn-avatar" aria-hidden="true">P</div>
+                <div
+                  className="turn-avatar"
+                  style={{ background: persona.color, color: "#fff" }}
+                  aria-hidden="true"
+                >
+                  {persona.initials}
+                </div>
                 <div className="bubble examiner">
                   <span className="who">Penguji</span>
                   <span className="msg">
@@ -516,10 +503,6 @@ export function SessionPage({ onClosed }: { onClosed: (a: Assessment) => void })
           </div>
         </aside>
       </div>
-
-      {err && <p className="error">{err}</p>}
-      {stt.error && <p className="error">🎙️ {stt.error}</p>}
-      {tts.error && <p className="hint">🔇 {tts.error}</p>}
 
       <ConfirmModal
         open={closeOpen}
