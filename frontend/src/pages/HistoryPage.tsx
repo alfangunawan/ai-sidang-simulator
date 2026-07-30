@@ -293,7 +293,11 @@ export function HistoryPage({ onOpenResult, openId, onOpened }: Props) {
                           >
                             {s.final_score ?? "—"}
                           </div>
-                          <div className="min-w-0 flex-1">
+                          {/* A floor rather than min-w-0: with three action
+                              buttons on the line, a shrink-to-nothing column
+                              crushes the label to one letter instead of
+                              wrapping the buttons onto their own row. */}
+                          <div className="min-w-40 flex-1">
                             <div className="truncate text-sm font-semibold">
                               {s.label ?? "Sesi latihan"}
                             </div>

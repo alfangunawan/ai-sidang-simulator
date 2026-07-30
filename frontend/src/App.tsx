@@ -141,23 +141,28 @@ export default function App() {
   return (
     <div className="min-h-dvh bg-background">
       <header className="sticky top-0 z-40 border-b bg-card/85 backdrop-blur-sm no-print">
-        <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <img src="/sibiru-icon.svg" alt="" width={34} height={34} />
-            <div className="leading-tight">
+        {/* Narrow screens cannot hold brand + three tabs + sign-out on one line,
+            so the tab bar drops to its own full-width row below. `order` does the
+            rearranging, which keeps the DOM in reading order on every width. */}
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-3 gap-y-3 px-4 py-3">
+          <div className="order-1 flex min-w-0 items-center gap-2.5">
+            <img src="/sibiru-icon.svg" alt="" width={34} height={34} className="shrink-0" />
+            <div className="min-w-0 leading-tight">
               <h1 className="font-serif text-lg font-semibold tracking-tight">SiBiru</h1>
-              <p className="text-[11px] text-muted-foreground">Simulator Sidang Skripsi</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                Simulator Sidang Skripsi
+              </p>
             </div>
           </div>
 
-          <nav className="ml-2 flex items-center gap-1 rounded-lg bg-muted p-1">
+          <nav className="order-3 flex w-full items-center gap-1 rounded-lg bg-muted p-1 sm:order-2 sm:ml-2 sm:w-auto">
             {TABS.map((t) => (
               <button
                 key={t.key}
                 onClick={() => goTab(t.key)}
                 aria-current={tab === t.key ? "page" : undefined}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none",
                   tab === t.key
                     ? "bg-card text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -168,13 +173,13 @@ export default function App() {
             ))}
           </nav>
 
-          <span className="ml-auto hidden text-sm text-muted-foreground sm:inline">
+          <span className="order-4 ml-auto hidden max-w-40 truncate text-sm text-muted-foreground sm:order-3 sm:inline">
             {user.username}
           </span>
           <Button
             variant="ghost"
             size="sm"
-            className="max-sm:ml-auto"
+            className="order-2 ml-auto sm:order-4 sm:ml-0"
             onClick={async () => {
               try {
                 await logout();

@@ -508,7 +508,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
         <nav className="sticky top-20 hidden h-fit flex-col gap-0.5 lg:flex">
           {NAV.map((n) => (
             <a
@@ -610,7 +610,7 @@ export function SettingsPage() {
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
                   <FileText className="size-5" aria-hidden="true" />
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-40 flex-1">
                   <div className="truncate text-sm font-semibold">{skripsi.filename}</div>
                   <div className="text-xs text-muted-foreground">
                     {nf.format(skripsi.char_count)} karakter

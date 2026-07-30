@@ -330,7 +330,7 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
         </span>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <Card className="overflow-hidden py-0">
           <CardHeader className="flex flex-row items-center gap-3 border-b bg-muted/40 py-4">
             <div className="relative">

@@ -115,8 +115,12 @@ export function HomePage({
     },
   ];
 
+  // The single mobile column is spelled minmax(0,1fr) rather than left implicit:
+  // an implicit `auto` track is floored at its items' min-content, and a
+  // `truncate` row reports its untruncated width there, which pushed the whole
+  // page wider than the viewport.
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex flex-col gap-6">
         <Card className="overflow-hidden">
           <CardContent className="relative">
