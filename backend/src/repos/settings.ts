@@ -57,6 +57,7 @@ export function getSettingsView(
 ): {
   provider: string;
   model: string;
+  base_url: string;
   has_api_key: boolean;
   attack_points: string;
   examiner_mode: string;
@@ -73,6 +74,7 @@ export function getSettingsView(
   return {
     provider: getSetting(db, userId, "provider") ?? DEFAULTS.provider,
     model: getSetting(db, userId, "model") ?? DEFAULTS.model,
+    base_url: getSetting(db, userId, "base_url") ?? "",
     has_api_key: getSetting(db, userId, "api_key") !== null,
     attack_points: getSetting(db, userId, "attack_points") ?? DEFAULTS.attack_points,
     examiner_mode: getSetting(db, userId, "examiner_mode") ?? DEFAULTS.examiner_mode,
@@ -102,6 +104,7 @@ export function saveSettings(
     provider?: string;
     api_key?: string;
     model?: string;
+    base_url?: string;
     attack_points?: string;
     examiner_mode?: string;
     examiner_type?: string;
@@ -115,6 +118,7 @@ export function saveSettings(
 ): void {
   if (body.provider !== undefined) setSetting(db, userId, "provider", body.provider);
   if (body.model !== undefined) setSetting(db, userId, "model", body.model);
+  if (body.base_url !== undefined) setSetting(db, userId, "base_url", body.base_url);
   if (body.attack_points !== undefined)
     setSetting(db, userId, "attack_points", body.attack_points);
   if (body.examiner_mode !== undefined)
@@ -202,6 +206,7 @@ export function getActiveConfig(
 ): {
   provider: string;
   model: string;
+  baseUrl: string;
   apiKey: string;
   attackPoints: string;
   examinerMode: string;
@@ -212,6 +217,7 @@ export function getActiveConfig(
   return {
     provider: getSetting(db, userId, "provider") ?? DEFAULTS.provider,
     model: getSetting(db, userId, "model") ?? DEFAULTS.model,
+    baseUrl: getSetting(db, userId, "base_url") ?? "",
     apiKey: decrypt(enc, key),
     ...getPersona(db, userId),
   };

@@ -226,7 +226,11 @@ export async function buildDossier(
       documentId,
       msg === TRUNCATED
         ? "Model kehabisan token output sebelum dossier selesai. Coba model lain di Pengaturan."
-        : "Gagal membaca skripsi menjadi dossier.",
+        // Sebabnya ikut dibawa: PDF-nya hampir selalu tidak bersalah — yang
+        // gagal adalah panggilan model (key, kuota, nama model). Tanpa sebab
+        // ini UI cuma bisa menyarankan "unggah PDF lain", dan user mengulang
+        // kegagalan yang sama.
+        : `Pembacaan naskah oleh model gagal: ${msg}`,
     );
   }
 }

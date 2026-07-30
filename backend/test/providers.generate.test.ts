@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ClaudeProvider } from "../src/providers/claude.js";
-import { OpenRouterProvider } from "../src/providers/openrouter.js";
+import { OpenAICompatProvider } from "../src/providers/openaiCompat.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -36,7 +36,7 @@ describe("provider.generate", () => {
         };
       }) as any,
     );
-    const provider = new OpenRouterProvider("or-key", "x/y");
+    const provider = new OpenAICompatProvider("or-key", "x/y", "https://openrouter.ai/api/v1", "OpenRouter");
     const out = await provider.generate("SYS", "USER", 512);
     expect(out.text).toBe("OK-TEXT");
     expect(capture.body.max_tokens).toBe(512);
@@ -51,7 +51,7 @@ describe("provider.generate", () => {
       "fetch",
       vi.fn(async () => ({ ok: false, status: 500 })) as any,
     );
-    const provider = new OpenRouterProvider("or-key", "x/y");
+    const provider = new OpenAICompatProvider("or-key", "x/y", "https://openrouter.ai/api/v1", "OpenRouter");
     await expect(provider.generate("s", "u", 100)).rejects.toThrow(/OpenRouter request failed/);
   });
 });
