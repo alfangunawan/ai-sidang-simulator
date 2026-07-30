@@ -74,9 +74,15 @@ export default function App() {
   // sitting has already begun.
   async function openSetup(step: 1 | 2 = 1) {
     setResumable(hasStoredSession());
-    if (step === 1 && !(await getSkripsi().catch(() => null))) {
-      setNeedSkripsi(true);
-      return;
+    // Bukan sekadar "naskah ada": tanpa dossier siap, giliran pertama pasti
+    // ditolak server, dan mahasiswa baru tahu setelah sidang dimulai. Modal
+    // naskah satu-satunya tempat yang bisa memperbaikinya.
+    if (step === 1) {
+      const s = await getSkripsi().catch(() => null);
+      if (s?.dossier_status !== "ready") {
+        setNeedSkripsi(true);
+        return;
+      }
     }
     setSetup(step);
   }

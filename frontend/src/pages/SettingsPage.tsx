@@ -27,6 +27,7 @@ import type {
   DossierStatus,
 } from "../types.js";
 import { CollabSettings } from "./CollabSettings.js";
+import { DossierProgress } from "../components/DossierProgress.js";
 import { Dropzone } from "../components/Dropzone.js";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ const CLAUDE_MODELS = [
 const PROVIDERS = [
   { value: "claude", label: "Claude" },
   { value: "openrouter", label: "OpenRouter" },
+  { value: "9router", label: "9router (URL sendiri)" },
 ];
 
 const TTS_PROVIDERS = [
@@ -91,6 +93,9 @@ const STT_PROVIDERS = [
   { value: "browser", label: "Browser (bawaan)" },
   { value: "whisper", label: "Whisper API (OpenAI)" },
 ];
+
+const labelOf = (list: { value: string; label: string }[], v: string): string =>
+  list.find((x) => x.value === v)?.label ?? v;
 
 const NAV = [
   { href: "#model", label: "Model AI" },
@@ -243,6 +248,7 @@ export function SettingsPage() {
   const [skripsi, setSkripsi] = useState<SkripsiInfo | null>(null);
   const [provider, setProvider] = useState("claude");
   const [model, setModel] = useState("claude-sonnet-5");
+  const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [attackPoints, setAttackPoints] = useState("");
   const [ttsProvider, setTtsProvider] = useState("browser");
@@ -274,6 +280,7 @@ export function SettingsPage() {
       setSettings(s);
       setProvider(s.provider);
       setModel(s.model);
+      setBaseUrl(s.base_url ?? "");
       setAttackPoints(s.attack_points);
       setTtsProvider(s.tts_provider);
       setTtsVoice(s.tts_voice);
@@ -352,22 +359,43 @@ export function SettingsPage() {
     };
   }, [ttsProvider]);
 
+  // Selama tergabung di kolaborasi, yang dipakai sidang adalah setelan host —
+  // bukan setelan sendiri. Jadi yang ditampilkan pun milik host, dikunci: kolom
+  // yang bisa disunting tapi diabaikan saat sidang hanya menyesatkan.
+  const sharedAi = !!settings?.effective_ai_shared;
+  const sharedTts = !!settings?.effective_tts_shared;
+  const sharedStt = !!settings?.effective_stt_shared;
+  const shownTtsProvider = sharedTts
+    ? (settings?.effective_tts_provider ?? "browser")
+    : ttsProvider;
+  const shownTtsVoice = sharedTts ? (settings?.effective_tts_voice ?? "") : ttsVoice;
+  const shownSttProvider = sharedStt
+    ? (settings?.effective_stt_provider ?? "browser")
+    : sttProvider;
+
   async function onSave() {
     setErr(null);
     setMsg(null);
     try {
-      const body: Record<string, string> = {
-        provider,
-        model,
-        attack_points: attackPoints,
-        tts_provider: ttsProvider,
-        tts_voice: ttsVoice,
-        stt_provider: sttProvider,
-      };
-      if (apiKey) body.api_key = apiKey;
-      if (googleKey) body.google_tts_key = googleKey;
-      if (openaiKey) body.openai_tts_key = openaiKey;
-      if (sttKey) body.openai_stt_key = sttKey;
+      // Field milik host tidak ikut dikirim: setelan sendiri dibiarkan utuh
+      // supaya kembali berlaku begitu user keluar dari kolaborasi.
+      const body: Record<string, string> = { attack_points: attackPoints };
+      if (!sharedAi) {
+        body.provider = provider;
+        body.model = model;
+        body.base_url = baseUrl;
+        if (apiKey) body.api_key = apiKey;
+      }
+      if (!sharedTts) {
+        body.tts_provider = ttsProvider;
+        body.tts_voice = ttsVoice;
+        if (googleKey) body.google_tts_key = googleKey;
+        if (openaiKey) body.openai_tts_key = openaiKey;
+      }
+      if (!sharedStt) {
+        body.stt_provider = sttProvider;
+        if (sttKey) body.openai_stt_key = sttKey;
+      }
       const updated = await saveSettings(body);
       setSettings(updated);
       setApiKey("");
@@ -384,7 +412,9 @@ export function SettingsPage() {
     setLlmTesting(true);
     setLlmStatus(null);
     try {
-      setLlmStatus(await testLlm({ provider, model, api_key: apiKey || undefined }));
+      setLlmStatus(
+        await testLlm({ provider, model, base_url: baseUrl, api_key: apiKey || undefined }),
+      );
     } catch (e) {
       setLlmStatus({ ok: false, error: (e as Error).message });
     } finally {
@@ -421,7 +451,7 @@ export function SettingsPage() {
     setPreviewErr(null);
     setPreviewing(true);
     try {
-      if (ttsProvider === "browser") {
+      if (shownTtsProvider === "browser") {
         if ("speechSynthesis" in window) {
           const u = new SpeechSynthesisUtterance(PREVIEW_SAMPLE);
           u.lang = "id-ID";
@@ -429,10 +459,12 @@ export function SettingsPage() {
           window.speechSynthesis.speak(u);
         }
       } else {
-        const key = ttsProvider === "google" ? googleKey : openaiKey;
+        // Tanpa key: server memakai key sumber efektif, jadi anggota kolaborasi
+        // tetap bisa mendengar suara yang akan dipakai sidangnya.
+        const key = shownTtsProvider === "google" ? googleKey : openaiKey;
         const { audio, mime } = await ttsPreview({
-          provider: ttsProvider,
-          voice: ttsVoice,
+          provider: shownTtsProvider,
+          voice: shownTtsVoice,
           key: key || undefined,
         });
         await new Audio(`data:${mime};base64,${audio}`).play();
@@ -527,8 +559,32 @@ export function SettingsPage() {
             id="model"
             title="Model AI"
             sub="Model yang memerankan penguji dan menyusun penilaian akhir."
-            aside={<Chip tone={llmChip.tone}>{llmChip.label}</Chip>}
+            aside={!sharedAi && <Chip tone={llmChip.tone}>{llmChip.label}</Chip>}
           >
+            {sharedAi ? (
+              <>
+                <Alert>
+                  <AlertDescription>
+                    Memakai AI dari host kolaborasi. Setelan ini dikunci selama Anda
+                    tergabung — keluar dari kolaborasi untuk memakai key sendiri.
+                  </AlertDescription>
+                </Alert>
+                <div className="flex flex-col gap-2">
+                  <Fact
+                    label="Provider (dari host)"
+                    value={labelOf(PROVIDERS, settings?.effective_provider ?? "")}
+                  />
+                  <Fact label="Model (dari host)" value={settings?.effective_model ?? "—"} />
+                  {settings?.effective_provider === "9router" && (
+                    <Fact
+                      label="URL API (dari host)"
+                      value={settings?.effective_base_url || "—"}
+                    />
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="provider">Provider</Label>
@@ -546,10 +602,12 @@ export function SettingsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="model">Model</Label>
+                {/* `llm-model`, bukan `model`: `model` sudah dipakai anchor
+                    Section di atasnya, dan label akan menempel ke kartunya. */}
+                <Label htmlFor="llm-model">Model</Label>
                 {provider === "claude" ? (
                   <Select value={model} onValueChange={setModel}>
-                    <SelectTrigger id="model" aria-label="Model" className="w-full">
+                    <SelectTrigger id="llm-model" aria-label="Model" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -562,7 +620,7 @@ export function SettingsPage() {
                   </Select>
                 ) : (
                   <Input
-                    id="model"
+                    id="llm-model"
                     value={model}
                     placeholder="mis. anthropic/claude-sonnet-4.6"
                     onChange={(e) => setModel(e.target.value)}
@@ -570,6 +628,22 @@ export function SettingsPage() {
                 )}
               </div>
             </div>
+
+            {provider === "9router" && (
+              <div className="grid gap-2">
+                <Label htmlFor="base-url">URL API</Label>
+                <Input
+                  id="base-url"
+                  value={baseUrl}
+                  placeholder="mis. https://api.9router.ai/v1"
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Endpoint bergaya OpenAI. Isi base URL-nya saja —{" "}
+                  <code>/chat/completions</code> ditambahkan otomatis.
+                </p>
+              </div>
+            )}
 
             <div>
               <KeyField
@@ -586,15 +660,12 @@ export function SettingsPage() {
                 Key disimpan di server lokal Anda dan hanya dipakai untuk memanggil
                 provider yang dipilih.
               </p>
-              {settings?.effective_ai_shared && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Memakai AI dari host — key sendiri tidak dipakai selama tergabung.
-                </p>
-              )}
               {llmStatus && !llmStatus.ok && (
                 <p className="mt-2 text-sm text-destructive">{llmStatus.error}</p>
               )}
             </div>
+              </>
+            )}
           </Section>
 
           {/* ---------------- Dokumen skripsi ----------------
@@ -655,8 +726,9 @@ export function SettingsPage() {
             {skripsi && dossier?.status === "pending" && (
               <Alert>
                 <AlertDescription>
-                  Membaca naskah dan menyusun poin serangan. Butuh sekitar satu menit —
-                  sidang belum bisa dimulai sampai selesai.
+                  Membaca naskah dan menyusun poin serangan — sidang belum bisa dimulai
+                  sampai selesai.
+                  <DossierProgress charCount={skripsi.char_count} />
                 </AlertDescription>
               </Alert>
             )}
@@ -740,15 +812,36 @@ export function SettingsPage() {
             title="Suara (TTS)"
             sub="Suara yang membacakan pertanyaan penguji saat sesi berjalan."
             aside={
+              !sharedTts &&
               ttsProvider !== "browser" && <Chip tone={ttsChip.tone}>{ttsChip.label}</Chip>
             }
           >
-            {settings?.effective_tts_shared && (
-              <p className="text-xs text-muted-foreground">
-                Memakai suara dari host — key sendiri tidak dipakai selama tergabung.
-              </p>
-            )}
-
+            {sharedTts ? (
+              <>
+                <Alert>
+                  <AlertDescription>
+                    Memakai suara dari host kolaborasi. Setelan ini dikunci selama Anda
+                    tergabung — keluar dari kolaborasi untuk memakai suara sendiri.
+                  </AlertDescription>
+                </Alert>
+                <div className="flex flex-col gap-2">
+                  <Fact
+                    label="Provider (dari host)"
+                    value={labelOf(TTS_PROVIDERS, shownTtsProvider)}
+                  />
+                  {shownTtsVoice && (
+                    <Fact label="Karakter suara (dari host)" value={shownTtsVoice} />
+                  )}
+                </div>
+                <div>
+                  <Button variant="outline" onClick={onPreview} disabled={previewing}>
+                    <Play />
+                    Preview Suara
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
             <div className="grid gap-2">
               <Label htmlFor="tts-provider">Provider Suara</Label>
               <Select value={ttsProvider} onValueChange={setTtsProvider}>
@@ -848,6 +941,8 @@ export function SettingsPage() {
                 </div>
               </div>
             )}
+              </>
+            )}
 
             {previewErr && <p className="text-sm text-destructive">🔇 {previewErr}</p>}
           </Section>
@@ -858,15 +953,25 @@ export function SettingsPage() {
             title="Suara ke Teks (STT)"
             sub="Cara jawaban lisan Anda diubah jadi teks sebelum dikirim ke penguji."
             aside={
+              !sharedStt &&
               sttProvider !== "browser" && <Chip tone={sttChip.tone}>{sttChip.label}</Chip>
             }
           >
-            {settings?.effective_stt_shared && (
-              <p className="text-xs text-muted-foreground">
-                Memakai diktasi dari host — key sendiri tidak dipakai selama tergabung.
-              </p>
-            )}
-
+            {sharedStt ? (
+              <>
+                <Alert>
+                  <AlertDescription>
+                    Memakai diktasi dari host kolaborasi. Setelan ini dikunci selama Anda
+                    tergabung — keluar dari kolaborasi untuk memakai key sendiri.
+                  </AlertDescription>
+                </Alert>
+                <Fact
+                  label="Provider (dari host)"
+                  value={labelOf(STT_PROVIDERS, shownSttProvider)}
+                />
+              </>
+            ) : (
+              <>
             <div className="grid gap-2">
               <Label htmlFor="stt-provider">Provider Diktasi</Label>
               <Select value={sttProvider} onValueChange={setSttProvider}>
@@ -911,6 +1016,8 @@ export function SettingsPage() {
                   TTS.
                 </p>
               </div>
+            )}
+              </>
             )}
 
             {sttStatus && !sttStatus.ok && (

@@ -55,7 +55,11 @@ function AlertDescription({
     <div
       data-slot="alert-description"
       className={cn(
-        "col-start-2 grid justify-items-start gap-1 text-sm text-muted-foreground [&_p]:leading-relaxed",
+        // `wrap-anywhere`: isi alert sering berupa pesan mentah dari server,
+        // dan satu URL panjang tanpa spasi tidak bisa dipenggal oleh
+        // pembungkusan biasa — token itu jadi lantai min-content dan mendorong
+        // alertnya melewati tepi dialog di layar sempit.
+        "col-start-2 grid justify-items-start gap-1 wrap-anywhere text-sm text-muted-foreground [&_p]:leading-relaxed",
         className
       )}
       {...props}

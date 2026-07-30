@@ -116,6 +116,7 @@ export async function saveSettings(body: {
   provider?: string;
   api_key?: string;
   model?: string;
+  base_url?: string;
   attack_points?: string;
   examiner_mode?: string;
   examiner_type?: string;
@@ -149,6 +150,7 @@ export async function getTtsVoices(provider: string): Promise<TtsVoice[]> {
 export async function testLlm(body: {
   provider?: string;
   model?: string;
+  base_url?: string;
   api_key?: string;
 }): Promise<TestResult> {
   return jsonOrThrow(await postJson("/api/settings/test-llm", body));

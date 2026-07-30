@@ -6,6 +6,7 @@ import * as api from "../api.js";
 const settingsView = {
   provider: "claude",
   model: "claude-sonnet-5",
+  base_url: "",
   has_api_key: true,
   attack_points: "",
   examiner_mode: "standar",

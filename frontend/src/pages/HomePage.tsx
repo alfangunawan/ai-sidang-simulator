@@ -78,6 +78,7 @@ export function HomePage({
 
   const recent = sessions.slice(0, 3);
   const lastScored = sessions.find((s) => s.final_score != null);
+  const effProvider = settings?.effective_provider ?? settings?.provider ?? "";
 
   const readiness = [
     {
@@ -93,8 +94,9 @@ export function HomePage({
     {
       key: "model",
       label: "Model AI",
+      // Model yang benar-benar akan menjawab — milik host bila key-nya dipinjam.
       value: settings
-        ? `${PROVIDER_LABELS[settings.provider] ?? settings.provider} · ${settings.model}`
+        ? `${PROVIDER_LABELS[effProvider] ?? effProvider} · ${settings.effective_model ?? settings.model}`
         : "Memuat…",
       ok: !!settings && (settings.has_api_key || !!settings.effective_ai_shared),
       action: "Atur",

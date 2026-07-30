@@ -9,6 +9,7 @@ export type ExaminerType = ExaminerMode;
 export interface SettingsView {
   provider: string;
   model: string;
+  base_url: string;
   has_api_key: boolean;
   attack_points: string;
   examiner_mode: string;
@@ -21,6 +22,9 @@ export interface SettingsView {
   has_openai_tts_key: boolean;
   stt_provider: string;
   has_openai_stt_key: boolean;
+  effective_provider?: string;
+  effective_model?: string;
+  effective_base_url?: string;
   effective_ai_shared?: boolean;
   effective_tts_shared?: boolean;
   effective_stt_shared?: boolean;
