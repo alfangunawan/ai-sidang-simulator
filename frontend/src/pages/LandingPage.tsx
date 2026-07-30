@@ -180,7 +180,7 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
             </div>
             <div className="lp-stats">
               <div className="lp-stat"><b>7 fase</b><span>agenda sidang penuh</span></div>
-              <div className="lp-stat"><b>4 × 5</b><span>mode × tipe penguji</span></div>
+              <div className="lp-stat"><b>6</b><span>penguji bernama</span></div>
               <div className="lp-stat"><b>15+</b><span>pertanyaan per sidang</span></div>
               <div className="lp-stat"><b>API key</b><span>milik Anda sendiri</span></div>
             </div>
@@ -196,7 +196,8 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
                 </div>
                 <div className="lp-mock-who">
                   <b>Dr. Ratna Wijaya, M.Kom.</b>
-                  <span>Penguji · mode Kritis · tipe Metodolog</span>
+                  {/* Same wording the session header uses; Ratna is standar/metodolog in personas.ts. */}
+                  <span>Sang metodolog · mode Standar</span>
                 </div>
                 <span className="lp-mock-rec">● MEREKAM</span>
               </div>
@@ -362,7 +363,7 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
           <div className="lp-head" data-reveal>
             <span className="lp-eyebrow">Karakter penguji</span>
             <h2>Tentukan seberapa keras, dan apa yang dikejar.</h2>
-            <p>Mode mengatur tekanan; tipe mengatur sudut serang. Keduanya bebas dikombinasikan — dua puluh karakter penguji yang berbeda.</p>
+            <p>Mode mengatur tekanan; tipe mengatur sudut serang. Enam karakter siap pakai dirakit dari keduanya — dari pembimbing yang menenangkan sampai penguji senior tanpa ampun.</p>
           </div>
 
           <div className="lp-picker">
@@ -400,7 +401,8 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
             </div>
 
             <div className="lp-pick" key={`${mode}-${type}`}>
-              <div className="lp-picker-label" style={{ marginBottom: 0, color: "#a8c3ff" }}>Karakter terpilih</div>
+              {/* An illustration of the two dials, not the app's picker — that is six named cards. */}
+              <div className="lp-picker-label" style={{ marginBottom: 0, color: "#a8c3ff" }}>Contoh kombinasi</div>
               <h3>Penguji {m[0]} · {t[0]}</h3>
               <p>{m[1]}</p>
               <p>{t[1]}</p>
