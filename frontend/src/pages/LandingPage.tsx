@@ -143,7 +143,7 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
       <header className="lp-header">
         <div className="lp-wrap">
           <a href="#atas" className="lp-brand">
-            <div className="lp-brand-mark" aria-hidden="true">S</div>
+            <img className="lp-brand-mark" src="/sibiru-icon.svg" alt="" width={36} height={36} />
             <div className="lp-brand-text">
               <span className="lp-brand-name">SiBiru</span>
               <span className="lp-brand-sub">Simulator Sidang Skripsi</span>
@@ -611,7 +611,7 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
       <footer className="lp-footer">
         <div className="lp-wrap">
           <div className="lp-brand">
-            <div className="lp-footer-mark" aria-hidden="true">S</div>
+            <img className="lp-footer-mark" src="/sibiru-icon.svg" alt="" width={32} height={32} />
             <span className="lp-brand-name">SiBiru</span>
           </div>
           <span className="lp-footer-note">Simulator sidang skripsi berbasis AI. Bukan pengganti bimbingan dosen.</span>

@@ -90,20 +90,13 @@ html:has(.lp) { scroll-behavior: smooth; }
   color: inherit;
 }
 
+/* The icon carries its own gradient tile and corner radius. */
 .lp-brand-mark {
+  display: block;
   width: 36px;
   height: 36px;
   border-radius: 11px;
-  background: linear-gradient(150deg, #3b82f6, var(--brand-dark));
-  display: flex;
-  align-items: center;
-  justify-content: center;
   box-shadow: 0 6px 16px rgba(37, 99, 235, .28);
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 600;
-  color: #fff;
-  line-height: 1;
 }
 
 .lp-brand-text {
@@ -1127,18 +1120,10 @@ html:has(.lp) { scroll-behavior: smooth; }
 }
 
 .lp-footer-mark {
+  display: block;
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background: linear-gradient(150deg, #3b82f6, var(--brand-dark));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-  line-height: 1;
 }
 
 .lp-footer-note { font-size: 13px; color: var(--faint); }

@@ -130,7 +130,7 @@ export default function App() {
       <header className="masthead">
         <div className="masthead-inner">
           <div className="brand">
-            <div className="brand-mark" aria-hidden="true">S</div>
+            <img className="brand-mark" src="/sibiru-icon.svg" alt="" width={38} height={38} />
             <div className="brand-text">
               <h1 className="wordmark">SiBiru</h1>
               <p className="tagline">Simulator Sidang Skripsi</p>

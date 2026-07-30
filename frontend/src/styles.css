@@ -100,14 +100,12 @@ a:hover { color: var(--brand-dark); text-decoration: underline; }
   flex-wrap: wrap;
 }
 .brand { display: flex; align-items: center; gap: 12px; }
+/* The icon carries its own gradient tile and corner radius. */
 .brand-mark {
+  display: block;
   width: 38px; height: 38px;
   border-radius: 11px;
-  background: linear-gradient(150deg, #3b82f6, var(--brand-dark));
-  display: flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 16px rgba(37, 99, 235, .28);
-  font-family: var(--font-display);
-  font-size: 21px; font-weight: 600; color: #fff; line-height: 1;
 }
 .brand-text { display: flex; flex-direction: column; gap: 1px; }
 .wordmark {
@@ -169,6 +167,13 @@ main.shell { max-width: 1240px; margin: 0 auto; padding: 32px; }
   box-shadow: var(--sh-lift);
   padding: 32px;
   text-align: center;
+}
+.auth-mark {
+  display: block;
+  width: 52px; height: 52px;
+  margin: 0 auto 14px;
+  border-radius: 15px;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .3);
 }
 .auth-card label { text-align: left; }
 .auth-card .tagline {

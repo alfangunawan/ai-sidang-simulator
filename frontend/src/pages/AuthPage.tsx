@@ -26,6 +26,7 @@ export function AuthPage({ onAuthed, onBack }: { onAuthed: (u: User) => void; on
   return (
     <div className="auth">
       <form className="auth-card" onSubmit={submit}>
+        <img className="auth-mark" src="/sibiru-icon.svg" alt="" width={52} height={52} />
         <h1 className="wordmark">SiBiru</h1>
         <p className="tagline">{mode === "login" ? "Masuk ke akunmu" : "Buat akun baru"}</p>
         <label htmlFor="username">Username</label>
