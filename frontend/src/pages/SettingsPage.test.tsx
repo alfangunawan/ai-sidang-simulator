@@ -74,6 +74,17 @@ const EMPTY_TOTALS = {
   calls: 0,
 };
 
+// The pickers are Radix selects: the options only exist once the trigger is
+// opened, and the trigger opens on pointerdown rather than click.
+async function pick(triggerLabel: string, optionName: string | RegExp) {
+  fireEvent.pointerDown(screen.getByLabelText(triggerLabel), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: optionName }));
+}
+
 beforeEach(() => {
   vi.spyOn(api, "getSettings").mockResolvedValue(VIEW);
   vi.spyOn(api, "getSkripsi").mockResolvedValue(null);
@@ -144,10 +155,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const ttsSelect = (
-      await screen.findByText("Google Cloud (Neural2 / Chirp3-HD)")
-    ).closest("select") as HTMLSelectElement;
-    fireEvent.change(ttsSelect, { target: { value: "google" } });
+    await pick("Provider Suara", "Google Cloud (Neural2 / Chirp3-HD)");
 
     // voice list loads and the Google key field appears
     await screen.findByText("id-ID-Chirp3-HD-Kore");
@@ -177,10 +185,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const sttSelect = (await screen.findByText("Whisper API (OpenAI)")).closest(
-      "select",
-    ) as HTMLSelectElement;
-    fireEvent.change(sttSelect, { target: { value: "whisper" } });
+    await pick("Provider Diktasi", "Whisper API (OpenAI)");
 
     const keyField = await screen.findByPlaceholderText(/tempel OpenAI API key/i);
     fireEvent.change(keyField, { target: { value: "sk-stt-1" } });
@@ -199,10 +204,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const sttSelect = (await screen.findByText("Whisper API (OpenAI)")).closest(
-      "select",
-    ) as HTMLSelectElement;
-    fireEvent.change(sttSelect, { target: { value: "whisper" } });
+    await pick("Provider Diktasi", "Whisper API (OpenAI)");
 
     fireEvent.change(await screen.findByPlaceholderText(/tempel OpenAI API key/i), {
       target: { value: "sk-typed" },
@@ -238,10 +240,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const ttsSelect = (
-      await screen.findByText("Google Cloud (Neural2 / Chirp3-HD)")
-    ).closest("select") as HTMLSelectElement;
-    fireEvent.change(ttsSelect, { target: { value: "google" } });
+    await pick("Provider Suara", "Google Cloud (Neural2 / Chirp3-HD)");
 
     await screen.findByText("id-ID-Chirp3-HD-Kore");
     fireEvent.click(screen.getByText(/Preview/));

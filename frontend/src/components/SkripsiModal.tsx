@@ -1,7 +1,18 @@
 import { useEffect, useState } from "react";
+import { FileText } from "lucide-react";
 import { getDossier, uploadSkripsi } from "../api.js";
 import type { DossierStatus, SkripsiInfo } from "../types.js";
 import { Dropzone } from "./Dropzone.js";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const nf = new Intl.NumberFormat("id-ID");
 
@@ -50,53 +61,61 @@ export function SkripsiModal({ onClose, onReady }: Props) {
   const ready = status === "ready";
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Unggah naskah skripsi"
-    >
-      <div className="modal modal-wide">
-        <h3>Unggah naskah skripsi dulu</h3>
-        <p>
-          Penguji bertanya langsung dari isi naskah Anda — bab, tabel, dan angka
-          yang benar-benar ada di sana. Unggah PDF skripsi di sini, lalu sidang
-          bisa dilanjutkan.
-        </p>
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Unggah naskah skripsi dulu</DialogTitle>
+          <DialogDescription>
+            Penguji bertanya langsung dari isi naskah Anda — bab, tabel, dan angka
+            yang benar-benar ada di sana. Unggah PDF skripsi di sini, lalu sidang
+            bisa dilanjutkan.
+          </DialogDescription>
+        </DialogHeader>
 
         {skripsi && status !== "failed" ? (
-          <div className="file-card">
-            <div className="file-icon" aria-hidden="true">PDF</div>
-            <div className="file-meta">
-              <div className="file-name">{skripsi.filename}</div>
-              <div className="file-sub">{nf.format(skripsi.char_count)} karakter</div>
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
+              <FileText className="size-5" aria-hidden="true" />
             </div>
-            <span className={ready ? "chip ok" : "chip"}>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{skripsi.filename}</div>
+              <div className="text-xs text-muted-foreground">
+                {nf.format(skripsi.char_count)} karakter
+              </div>
+            </div>
+            <Badge
+              variant="secondary"
+              className={ready ? "bg-success/15 text-success" : undefined}
+            >
               {ready ? "✓ Siap" : "⏳ Menganalisis"}
-            </span>
+            </Badge>
           </div>
         ) : (
           <Dropzone busy={busy} onFile={upload} />
         )}
 
         {skripsi && status === "pending" && (
-          <p className="hint">
+          <p className="text-xs text-muted-foreground">
             Membaca naskah dan menyusun poin serangan. Butuh sekitar satu menit —
             sidang belum bisa dimulai sampai selesai.
           </p>
         )}
         {status === "failed" && (
-          <p className="error">Gagal membaca naskah ini. Coba unggah PDF lain.</p>
+          <p className="text-sm text-destructive">
+            Gagal membaca naskah ini. Coba unggah PDF lain.
+          </p>
         )}
-        {err && <p className="error">{err}</p>}
+        {err && <p className="text-sm text-destructive">{err}</p>}
 
-        <div className="modal-actions">
-          <button onClick={onClose}>Nanti saja</button>
-          <button className="primary" disabled={!ready} onClick={onReady}>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Nanti saja
+          </Button>
+          <Button disabled={!ready} onClick={onReady}>
             {skripsi && !ready ? "Membaca naskah…" : "Lanjut pilih penguji"}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

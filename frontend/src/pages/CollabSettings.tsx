@@ -10,8 +10,21 @@ import {
   kickMember,
 } from "../api.js";
 import type { CollabState, CollabShares } from "../types.js";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 const EMPTY: CollabState = { hosting: null, joined: null };
+
+const SHARES: { key: keyof CollabShares; label: string; hint: string }[] = [
+  { key: "share_ai", label: "AI", hint: "jawaban penguji" },
+  { key: "share_tts", label: "Suara (TTS)", hint: "text-to-speech" },
+  { key: "share_stt", label: "Diktasi (STT)", hint: "speech-to-text" },
+];
 
 function formatJoined(iso: string): string {
   const d = new Date(iso);
@@ -81,159 +94,174 @@ export function CollabSettings() {
   const { hosting, joined } = state;
 
   return (
-    <section id="kolaborasi" className="card card-lg collab">
-      <div className="section-head">
-        <div>
-          <h3>Kolaborasi</h3>
-          <p>
-            Bagikan key AI/Suara/Diktasi Anda dengan anggota tim, atau gabung
-            ke kolaborasi lewat kode undangan.
-          </p>
-        </div>
-      </div>
-
-      {!hosting && (
-        <div className="field">
-          <button onClick={onBecomeHost}>Jadi host</button>
-          <p className="hint">
-            Jadi host untuk membagikan key Anda ke anggota tim lewat kode undangan.
-          </p>
-        </div>
-      )}
-
-      {hosting && (
-        <>
-          <div className="field">
-            <label>Kode undangan Anda</label>
-            <div className="inline-row">
-              <code className="collab-code">{hosting.invite_code}</code>
-              <button
-                className="sm"
-                onClick={() => navigator.clipboard?.writeText(hosting.invite_code)}
-              >
-                Salin
-              </button>
-              <button className="sm" onClick={onRegenerate}>
-                Regenerate
-              </button>
-            </div>
-          </div>
-
-          <div className="field">
-            <label>Bagikan ke anggota</label>
-            <div className="share-toggles">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={!!hosting.shares.share_ai}
-                  onChange={() => onToggleShare("share_ai")}
-                />
-                <span>AI</span>
-                <span className="hint">jawaban penguji</span>
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={!!hosting.shares.share_tts}
-                  onChange={() => onToggleShare("share_tts")}
-                />
-                <span>Suara (TTS)</span>
-                <span className="hint">text-to-speech</span>
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={!!hosting.shares.share_stt}
-                  onChange={() => onToggleShare("share_stt")}
-                />
-                <span>Diktasi (STT)</span>
-                <span className="hint">speech-to-text</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="field">
-            <label>Anggota ({hosting.members.length})</label>
-            {hosting.members.length === 0 ? (
-              <p className="hint" style={{ marginTop: 0 }}>
-                Belum ada anggota yang gabung.
-              </p>
-            ) : (
-              <ul className="member-list">
-                {hosting.members.map((m) => (
-                  <li key={m.member_user_id} className="member-row">
-                    <span>{m.username}</span>
-                    <span className="hint">Gabung {formatJoined(m.joined_at)}</span>
-                    <button className="sm danger" onClick={() => onKick(m.member_user_id)}>
-                      Keluarkan
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="field">
-            <label>Pemakaian</label>
-            <p className="hint" style={{ marginTop: 0 }}>
-              Total panggilan: {hosting.usage.total.calls}
-            </p>
-            {hosting.usage.by_member.length > 0 && (
-              <ul className="member-list">
-                {hosting.usage.by_member.map((m) => (
-                  <li key={m.member_user_id} className="member-row">
-                    <span>{m.username}</span>
-                    <span>{m.totals.calls} panggilan</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <button className="danger" onClick={onDisband}>
-            Bubarkan
-          </button>
-        </>
-      )}
-
-      {!joined && (
-        <div className="field">
-          <label htmlFor="collab-code">Kode undangan</label>
-          <div className="inline-row">
-            <input
-              id="collab-code"
-              value={code}
-              placeholder="tempel kode undangan host"
-              onChange={(e) => setCode(e.target.value)}
-            />
-            <button onClick={onJoin} disabled={!code.trim()}>
-              Gabung
-            </button>
-          </div>
-        </div>
-      )}
-
-      {joined && (
-        <div className="field">
-          <p>
-            Tergabung dengan: <strong>{joined.host_username}</strong>
-          </p>
-          <div className="inline-row">
-            {!!joined.shares.share_ai && <span className="badge">AI</span>}
-            {!!joined.shares.share_tts && <span className="badge">TTS</span>}
-            {!!joined.shares.share_stt && <span className="badge">STT</span>}
-          </div>
-          <button className="sm danger" onClick={onLeave}>
-            Keluar
-          </button>
-        </div>
-      )}
-
-      {err && (
-        <p role="alert" className="error">
-          {err}
+    <Card id="kolaborasi" className="scroll-mt-24">
+      <CardHeader>
+        <CardTitle>Kolaborasi</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Bagikan key AI/Suara/Diktasi Anda dengan anggota tim, atau gabung ke
+          kolaborasi lewat kode undangan.
         </p>
-      )}
-    </section>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-5">
+        {!hosting && (
+          <div>
+            <Button variant="outline" onClick={onBecomeHost}>
+              Jadi host
+            </Button>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Jadi host untuk membagikan key Anda ke anggota tim lewat kode undangan.
+            </p>
+          </div>
+        )}
+
+        {hosting && (
+          <>
+            <div>
+              <div className="mb-2 text-sm font-medium">Kode undangan Anda</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="rounded-md border bg-muted px-3 py-1.5 font-mono text-sm">
+                  {hosting.invite_code}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigator.clipboard?.writeText(hosting.invite_code)}
+                >
+                  Salin
+                </Button>
+                <Button variant="outline" size="sm" onClick={onRegenerate}>
+                  Regenerate
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-3 text-sm font-medium">Bagikan ke anggota</div>
+              <div className="flex flex-col gap-3">
+                {SHARES.map((s) => (
+                  <div key={s.key} className="flex items-center gap-2.5">
+                    <Checkbox
+                      id={`share-${s.key}`}
+                      checked={!!hosting.shares[s.key]}
+                      onCheckedChange={() => onToggleShare(s.key)}
+                    />
+                    <Label htmlFor={`share-${s.key}`} className="font-normal">
+                      {s.label}
+                    </Label>
+                    <span className="text-xs text-muted-foreground">{s.hint}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-sm font-medium">
+                Anggota ({hosting.members.length})
+              </div>
+              {hosting.members.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Belum ada anggota yang gabung.
+                </p>
+              ) : (
+                <ul className="divide-y rounded-lg border">
+                  {hosting.members.map((m) => (
+                    <li key={m.member_user_id} className="flex items-center gap-3 px-3 py-2">
+                      <span className="text-sm">{m.username}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Gabung {formatJoined(m.joined_at)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="ml-auto text-destructive hover:text-destructive"
+                        onClick={() => onKick(m.member_user_id)}
+                      >
+                        Keluarkan
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-2 text-sm font-medium">Pemakaian</div>
+              <p className="text-xs text-muted-foreground">
+                Total panggilan: {hosting.usage.total.calls}
+              </p>
+              {hosting.usage.by_member.length > 0 && (
+                <ul className="mt-2 divide-y rounded-lg border">
+                  {hosting.usage.by_member.map((m) => (
+                    <li
+                      key={m.member_user_id}
+                      className="flex items-center justify-between px-3 py-2 text-sm"
+                    >
+                      <span>{m.username}</span>
+                      <span className="text-muted-foreground">
+                        {m.totals.calls} panggilan
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <Button variant="outline" className="text-destructive hover:text-destructive"
+                onClick={onDisband}>
+                Bubarkan
+              </Button>
+            </div>
+
+            <Separator />
+          </>
+        )}
+
+        {!joined && (
+          <div>
+            <Label htmlFor="collab-code">Kode undangan</Label>
+            <div className="mt-2 flex gap-2">
+              <Input
+                id="collab-code"
+                value={code}
+                placeholder="tempel kode undangan host"
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <Button onClick={onJoin} disabled={!code.trim()}>
+                Gabung
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {joined && (
+          <div>
+            <p className="text-sm">
+              Tergabung dengan: <strong>{joined.host_username}</strong>
+            </p>
+            <div className="mt-2 flex gap-1.5">
+              {!!joined.shares.share_ai && <Badge variant="secondary">AI</Badge>}
+              {!!joined.shares.share_tts && <Badge variant="secondary">TTS</Badge>}
+              {!!joined.shares.share_stt && <Badge variant="secondary">STT</Badge>}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 text-destructive hover:text-destructive"
+              onClick={onLeave}
+            >
+              Keluar
+            </Button>
+          </div>
+        )}
+
+        {err && (
+          <p role="alert" className="text-sm text-destructive">
+            {err}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

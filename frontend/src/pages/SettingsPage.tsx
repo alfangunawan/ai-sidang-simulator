@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FileText, Play } from "lucide-react";
 import {
   getSettings,
   saveSettings,
@@ -26,6 +27,33 @@ import type {
   DossierStatus,
 } from "../types.js";
 import { CollabSettings } from "./CollabSettings.js";
+import { Dropzone } from "../components/Dropzone.js";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 const PREVIEW_SAMPLE = "Halo, ini contoh suara penguji sidang.";
 
@@ -48,6 +76,11 @@ const CLAUDE_MODELS = [
   "claude-opus-4-8",
 ];
 
+const PROVIDERS = [
+  { value: "claude", label: "Claude" },
+  { value: "openrouter", label: "OpenRouter" },
+];
+
 const TTS_PROVIDERS = [
   { value: "browser", label: "Browser (bawaan)" },
   { value: "google", label: "Google Cloud (Neural2 / Chirp3-HD)" },
@@ -61,32 +94,149 @@ const STT_PROVIDERS = [
 
 const NAV = [
   { href: "#model", label: "Model AI" },
+  { href: "#dokumen", label: "Dokumen skripsi" },
   { href: "#penguji", label: "Perilaku penguji" },
   { href: "#suara", label: "Suara penguji" },
   { href: "#diktasi", label: "Suara ke teks" },
-  { href: "#dokumen", label: "Dokumen skripsi" },
   { href: "#pemakaian", label: "Pemakaian token" },
   { href: "#kolaborasi", label: "Kolaborasi" },
 ];
+
+const TONE = {
+  neutral: "bg-muted text-muted-foreground",
+  ok: "bg-success/15 text-success",
+  bad: "bg-destructive/10 text-destructive",
+  busy: "bg-warning/15 text-warning",
+};
 
 // One chip per connection: neutral before a test, then the test's verdict.
 function statusChip(
   testing: boolean,
   status: TestResult | null,
   okLabel: string,
-): { cls: string; label: string } {
-  if (testing) return { cls: "chip warn", label: "● Menguji…" };
-  if (!status) return { cls: "chip", label: "● Belum diuji" };
+): { tone: string; label: string } {
+  if (testing) return { tone: TONE.busy, label: "● Menguji…" };
+  if (!status) return { tone: TONE.neutral, label: "● Belum diuji" };
   return status.ok
-    ? { cls: "chip ok", label: `✓ ${okLabel}` }
-    : { cls: "chip bad", label: "✗ Gagal" };
+    ? { tone: TONE.ok, label: `✓ ${okLabel}` }
+    : { tone: TONE.bad, label: "✗ Gagal" };
 }
 
-const DOSSIER_CHIP: Record<DossierStatus, { cls: string; label: string }> = {
-  pending: { cls: "chip", label: "⏳ Menganalisis" },
-  ready: { cls: "chip ok", label: "✓ Siap" },
-  failed: { cls: "chip bad", label: "✗ Gagal" },
+const DOSSIER_CHIP: Record<DossierStatus, { tone: string; label: string }> = {
+  pending: { tone: TONE.neutral, label: "⏳ Menganalisis" },
+  ready: { tone: TONE.ok, label: "✓ Siap" },
+  failed: { tone: TONE.bad, label: "✗ Gagal" },
 };
+
+function Chip({ tone, children }: { tone: string; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap",
+        tone,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function KeyChip({ stored }: { stored?: boolean }) {
+  return (
+    <Chip tone={stored ? TONE.ok : TONE.neutral}>
+      Key tersimpan: {stored ? "ya" : "tidak"}
+    </Chip>
+  );
+}
+
+function Section({
+  id,
+  title,
+  sub,
+  aside,
+  children,
+}: {
+  id: string;
+  title: string;
+  sub?: React.ReactNode;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card id={id} className="scroll-mt-24">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div className="min-w-0">
+          <CardTitle>{title}</CardTitle>
+          {sub && <p className="mt-1 text-sm text-muted-foreground">{sub}</p>}
+        </div>
+        {aside}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5">{children}</CardContent>
+    </Card>
+  );
+}
+
+/** Password-style key field with its own "test the connection" button. */
+function KeyField({
+  label,
+  stored,
+  value,
+  placeholderWhenEmpty,
+  onChange,
+  testLabel,
+  testing,
+  onTest,
+}: {
+  label: string;
+  stored?: boolean;
+  value: string;
+  placeholderWhenEmpty: string;
+  onChange: (v: string) => void;
+  testLabel: string;
+  testing: boolean;
+  onTest: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <Label>{label}</Label>
+        <KeyChip stored={stored} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Input
+          type="password"
+          className="min-w-52 flex-1"
+          value={value}
+          placeholder={
+            stored ? "(biarkan kosong untuk mempertahankan)" : placeholderWhenEmpty
+          }
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <Button variant="outline" onClick={onTest} disabled={testing}>
+          {testing ? "Menguji…" : testLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function UsageCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-lg font-bold tabular-nums">{nf.format(value)}</div>
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[13rem_1fr] sm:gap-4">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm">{value}</span>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsView | null>(null);
@@ -117,6 +267,7 @@ export function SettingsPage() {
   const [poinDraft, setPoinDraft] = useState("");
   const [savingDossier, setSavingDossier] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -304,11 +455,10 @@ export function SettingsPage() {
     }
   }
 
-  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function onUpload(file: File) {
     setErr(null);
     setMsg(null);
+    setUploading(true);
     try {
       setSkripsi(await uploadSkripsi(file));
       await loadDossier();
@@ -316,7 +466,7 @@ export function SettingsPage() {
     } catch (e) {
       setErr((e as Error).message);
     }
-    e.target.value = "";
+    setUploading(false);
   }
 
   async function onDeleteSkripsi() {
@@ -344,62 +494,75 @@ export function SettingsPage() {
 
   return (
     <div>
-      <div className="page-head">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2>Pengaturan</h2>
-          <p className="page-sub">
-            Konfigurasi model AI, suara penguji, dan dokumen skripsi yang jadi
-            bahan pertanyaan.
+          <h2 className="font-serif text-2xl font-semibold tracking-tight">Pengaturan</h2>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            Konfigurasi model AI, suara penguji, dan dokumen skripsi yang jadi bahan
+            pertanyaan.
           </p>
         </div>
-        <div className="save-bar">
-          {msg && <span className="save-note">{msg}</span>}
-          <button className="primary" onClick={onSave}>
-            Simpan Pengaturan
-          </button>
+        <div className="flex items-center gap-3">
+          {msg && <span className="text-sm font-medium text-success">{msg}</span>}
+          <Button onClick={onSave}>Simpan Pengaturan</Button>
         </div>
       </div>
 
-      <div className="settings-grid">
-        <nav className="settings-nav">
+      <div className="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
+        <nav className="sticky top-20 hidden h-fit flex-col gap-0.5 lg:flex">
           {NAV.map((n) => (
-            <a key={n.href} href={n.href}>
+            <a
+              key={n.href}
+              href={n.href}
+              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
               {n.label}
             </a>
           ))}
         </nav>
 
-        <div className="stack-lg">
+        <div className="flex flex-col gap-6">
           {/* ---------------- Model AI ---------------- */}
-          <section id="model" className="card card-lg">
-            <div className="section-head">
-              <div>
-                <h3>Model AI</h3>
-                <p>Model yang memerankan penguji dan menyusun penilaian akhir.</p>
-              </div>
-              <span className={llmChip.cls}>{llmChip.label}</span>
-            </div>
-
-            <div className="grid-2">
-              <div className="field">
-                <label>Provider</label>
-                <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                  <option value="claude">Claude</option>
-                  <option value="openrouter">OpenRouter</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Model</label>
-                {provider === "claude" ? (
-                  <select value={model} onChange={(e) => setModel(e.target.value)}>
-                    {CLAUDE_MODELS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
+          <Section
+            id="model"
+            title="Model AI"
+            sub="Model yang memerankan penguji dan menyusun penilaian akhir."
+            aside={<Chip tone={llmChip.tone}>{llmChip.label}</Chip>}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="provider">Provider</Label>
+                <Select value={provider} onValueChange={setProvider}>
+                  <SelectTrigger id="provider" aria-label="Provider" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROVIDERS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
                     ))}
-                  </select>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="model">Model</Label>
+                {provider === "claude" ? (
+                  <Select value={model} onValueChange={setModel}>
+                    <SelectTrigger id="model" aria-label="Model" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLAUDE_MODELS.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : (
-                  <input
+                  <Input
+                    id="model"
                     value={model}
                     placeholder="mis. anthropic/claude-sonnet-4.6"
                     onChange={(e) => setModel(e.target.value)}
@@ -408,437 +571,428 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="field">
-              <div className="label-row">
-                <label>API Key</label>
-                <span className={settings?.has_api_key ? "chip ok" : "chip"}>
-                  Key tersimpan: {settings?.has_api_key ? "ya" : "tidak"}
-                </span>
-              </div>
-              <div className="inline-row">
-                <input
-                  type="password"
-                  value={apiKey}
-                  placeholder={
-                    settings?.has_api_key
-                      ? "(biarkan kosong untuk mempertahankan)"
-                      : "tempel API key"
-                  }
-                  onChange={(e) => setApiKey(e.target.value)}
-                />
-                <button onClick={onTestLlm} disabled={llmTesting}>
-                  {llmTesting ? "Menguji…" : "Tes Koneksi"}
-                </button>
-              </div>
-              <p className="hint">
+            <div>
+              <KeyField
+                label="API Key"
+                stored={settings?.has_api_key}
+                value={apiKey}
+                placeholderWhenEmpty="tempel API key"
+                onChange={setApiKey}
+                testLabel="Tes Koneksi"
+                testing={llmTesting}
+                onTest={onTestLlm}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
                 Key disimpan di server lokal Anda dan hanya dipakai untuk memanggil
                 provider yang dipilih.
               </p>
               {settings?.effective_ai_shared && (
-                <p className="hint">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Memakai AI dari host — key sendiri tidak dipakai selama tergabung.
                 </p>
               )}
-              {llmStatus && !llmStatus.ok && <p className="error">{llmStatus.error}</p>}
-            </div>
-          </section>
-
-          {/* ---------------- Perilaku penguji ---------------- */}
-          <section id="penguji" className="card card-lg">
-            <div className="section-head">
-              <div>
-                <h3>Perilaku penguji</h3>
-                <p>
-                  Poin serangan dibaca otomatis dari naskah saat skripsi diunggah.
-                  Sunting bila ada yang meleset atau ingin Anda tambahkan.
-                </p>
-              </div>
-              {dossier?.status && (
-                <span className={DOSSIER_CHIP[dossier.status].cls}>
-                  {DOSSIER_CHIP[dossier.status].label}
-                </span>
+              {llmStatus && !llmStatus.ok && (
+                <p className="mt-2 text-sm text-destructive">{llmStatus.error}</p>
               )}
             </div>
+          </Section>
 
+          {/* ---------------- Dokumen skripsi ----------------
+              Berdampingan dengan Perilaku penguji di bawahnya: poin serangan
+              lahir dari naskah ini, jadi keduanya dibaca sebagai satu urusan. */}
+          <Section
+            id="dokumen"
+            title="Skripsi (PDF)"
+            sub="Sumber utama pertanyaan penguji. Unggah naskah terbaru agar pertanyaan tetap relevan."
+          >
+            {skripsi ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive">
+                  <FileText className="size-5" aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{skripsi.filename}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {nf.format(skripsi.char_count)} karakter
+                  </div>
+                </div>
+                <Chip tone={TONE.ok}>✓ Terindeks</Chip>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={onDeleteSkripsi}
+                >
+                  Hapus
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Belum ada skripsi.</p>
+            )}
+
+            <Dropzone busy={uploading} onFile={onUpload} />
+          </Section>
+
+          {/* ---------------- Perilaku penguji ---------------- */}
+          <Section
+            id="penguji"
+            title="Perilaku penguji"
+            sub="Poin serangan dibaca otomatis dari naskah saat skripsi diunggah. Sunting bila ada yang meleset atau ingin Anda tambahkan."
+            aside={
+              dossier?.status && (
+                <Chip tone={DOSSIER_CHIP[dossier.status].tone}>
+                  {DOSSIER_CHIP[dossier.status].label}
+                </Chip>
+              )
+            }
+          >
             {!skripsi && (
-              <p className="empty-sub" style={{ marginTop: 0 }}>
-                Unggah skripsi dulu di bagian Dokumen skripsi.
+              <p className="text-sm text-muted-foreground">
+                Unggah skripsi dulu di kartu Skripsi (PDF) di atas.
               </p>
             )}
 
             {skripsi && dossier?.status === "pending" && (
-              <p className="hint" style={{ marginTop: 0 }}>
-                Membaca naskah dan menyusun poin serangan. Butuh sekitar satu menit —
-                sidang belum bisa dimulai sampai selesai.
-              </p>
+              <Alert>
+                <AlertDescription>
+                  Membaca naskah dan menyusun poin serangan. Butuh sekitar satu menit —
+                  sidang belum bisa dimulai sampai selesai.
+                </AlertDescription>
+              </Alert>
             )}
 
             {skripsi && dossier?.status === "failed" && (
-              <p className="err" style={{ marginTop: 0 }}>
-                {dossier.error ?? "Gagal membaca skripsi."}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {dossier.error ?? "Gagal membaca skripsi."}
+                </AlertDescription>
+              </Alert>
             )}
 
             {skripsi && dossier?.dossier && (
               <>
-                <div className="field">
-                  <label>Poin Serangan Penguji</label>
-                  <textarea
+                <div className="grid gap-2">
+                  <Label htmlFor="poin">Poin Serangan Penguji</Label>
+                  <Textarea
+                    id="poin"
                     rows={8}
                     value={poinDraft}
                     placeholder="Satu poin per baris."
                     onChange={(e) => setPoinDraft(e.target.value)}
                   />
-                  <p className="hint">
-                    Pisahkan tiap poin dengan baris baru. Kosongkan agar pertanyaan
-                    murni dari isi skripsi.
+                  <p className="text-xs text-muted-foreground">
+                    Pisahkan tiap poin dengan baris baru. Kosongkan agar pertanyaan murni
+                    dari isi skripsi.
                   </p>
                 </div>
-                <div className="row">
-                  <button className="primary" disabled={savingDossier} onClick={onSavePoin}>
+                <div>
+                  <Button disabled={savingDossier} onClick={onSavePoin}>
                     {savingDossier ? "Menyimpan…" : "Simpan poin serangan"}
-                  </button>
+                  </Button>
                 </div>
-                <dl className="dossier-facts">
-                  <div><dt>Judul terbaca</dt><dd>{dossier.dossier.judul}</dd></div>
-                  <div>
-                    <dt>Rumusan masalah / kesimpulan</dt>
-                    <dd>
-                      {dossier.dossier.fakta_struktural.jumlah_rumusan_masalah} /{" "}
-                      {dossier.dossier.fakta_struktural.jumlah_kesimpulan}
-                      {dossier.dossier.fakta_struktural.rumusan_tanpa_kesimpulan.length > 0 &&
-                        ` — ${dossier.dossier.fakta_struktural.rumusan_tanpa_kesimpulan.length} rumusan belum terjawab`}
-                    </dd>
-                  </div>
+
+                <Separator />
+
+                <div className="flex flex-col gap-2">
+                  <Fact label="Judul terbaca" value={dossier.dossier.judul} />
+                  <Fact
+                    label="Rumusan masalah / kesimpulan"
+                    value={`${dossier.dossier.fakta_struktural.jumlah_rumusan_masalah} / ${dossier.dossier.fakta_struktural.jumlah_kesimpulan}${
+                      dossier.dossier.fakta_struktural.rumusan_tanpa_kesimpulan.length > 0
+                        ? ` — ${dossier.dossier.fakta_struktural.rumusan_tanpa_kesimpulan.length} rumusan belum terjawab`
+                        : ""
+                    }`}
+                  />
                   {dossier.dossier.metode.nama && (
-                    <div><dt>Metode</dt><dd>{dossier.dossier.metode.nama}</dd></div>
+                    <Fact label="Metode" value={dossier.dossier.metode.nama} />
                   )}
                   {dossier.dossier.populasi_sampel.jumlah !== null && (
-                    <div><dt>Responden</dt><dd>{dossier.dossier.populasi_sampel.jumlah}</dd></div>
+                    <Fact
+                      label="Responden"
+                      value={String(dossier.dossier.populasi_sampel.jumlah)}
+                    />
                   )}
                   {dossier.dossier.modul_kritik_terpicu.length > 0 && (
-                    <div>
-                      <dt>Modul kritik aktif</dt>
-                      <dd>{dossier.dossier.modul_kritik_terpicu.join(", ")}</dd>
-                    </div>
+                    <Fact
+                      label="Modul kritik aktif"
+                      value={dossier.dossier.modul_kritik_terpicu.join(", ")}
+                    />
                   )}
-                </dl>
+                </div>
               </>
             )}
 
             {skripsi && (
-              <div className="row">
-                <button className="sm" disabled={rebuilding} onClick={onRebuildDossier}>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="outline" size="sm" disabled={rebuilding} onClick={onRebuildDossier}>
                   {rebuilding ? "Membaca ulang…" : "Baca ulang skripsi"}
-                </button>
-                <span className="hint">
+                </Button>
+                <span className="text-xs text-muted-foreground">
                   Menjalankan ulang pembacaan naskah. Menimpa suntingan Anda.
                 </span>
               </div>
             )}
-          </section>
+          </Section>
 
           {/* ---------------- Suara penguji ---------------- */}
-          <section id="suara" className="card card-lg">
-            <div className="section-head">
-              <div>
-                <h3>Suara (TTS)</h3>
-                <p>Suara yang membacakan pertanyaan penguji saat sesi berjalan.</p>
-              </div>
-              {ttsProvider !== "browser" && <span className={ttsChip.cls}>{ttsChip.label}</span>}
-            </div>
-
+          <Section
+            id="suara"
+            title="Suara (TTS)"
+            sub="Suara yang membacakan pertanyaan penguji saat sesi berjalan."
+            aside={
+              ttsProvider !== "browser" && <Chip tone={ttsChip.tone}>{ttsChip.label}</Chip>
+            }
+          >
             {settings?.effective_tts_shared && (
-              <p className="hint" style={{ marginTop: 0 }}>
+              <p className="text-xs text-muted-foreground">
                 Memakai suara dari host — key sendiri tidak dipakai selama tergabung.
               </p>
             )}
 
-            <div className="field">
-              <label>Provider Suara</label>
-              <select value={ttsProvider} onChange={(e) => setTtsProvider(e.target.value)}>
-                {TTS_PROVIDERS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid gap-2">
+              <Label htmlFor="tts-provider">Provider Suara</Label>
+              <Select value={ttsProvider} onValueChange={setTtsProvider}>
+                <SelectTrigger
+                  id="tts-provider"
+                  aria-label="Provider Suara"
+                  className="w-full sm:w-96"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TTS_PROVIDERS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {ttsProvider === "browser" && (
-              <div className="field">
-                <p className="hint" style={{ marginTop: 0 }}>
+              <div>
+                <p className="mb-2 text-xs text-muted-foreground">
                   Memakai suara bawaan browser (gratis, offline, tanpa key). Kualitas
                   tergantung perangkat.
                 </p>
-                <button className="sm" onClick={onPreview} disabled={previewing}>
-                  ▶ Preview Suara
-                </button>
+                <Button variant="outline" size="sm" onClick={onPreview} disabled={previewing}>
+                  <Play />
+                  Preview Suara
+                </Button>
               </div>
             )}
 
             {ttsProvider === "google" && (
-              <div className="field">
-                <div className="label-row">
-                  <label>Google Cloud API Key</label>
-                  <span className={settings?.has_google_tts_key ? "chip ok" : "chip"}>
-                    Key tersimpan: {settings?.has_google_tts_key ? "ya" : "tidak"}
-                  </span>
-                </div>
-                <div className="inline-row">
-                  <input
-                    type="password"
-                    value={googleKey}
-                    placeholder={
-                      settings?.has_google_tts_key
-                        ? "(biarkan kosong untuk mempertahankan)"
-                        : "tempel Google Cloud API key"
-                    }
-                    onChange={(e) => setGoogleKey(e.target.value)}
-                  />
-                  <button onClick={onTestTts} disabled={ttsTesting}>
-                    {ttsTesting ? "Menguji…" : "Tes Koneksi TTS"}
-                  </button>
-                </div>
-              </div>
+              <KeyField
+                label="Google Cloud API Key"
+                stored={settings?.has_google_tts_key}
+                value={googleKey}
+                placeholderWhenEmpty="tempel Google Cloud API key"
+                onChange={setGoogleKey}
+                testLabel="Tes Koneksi TTS"
+                testing={ttsTesting}
+                onTest={onTestTts}
+              />
             )}
 
             {ttsProvider === "openai" && (
-              <div className="field">
-                <div className="label-row">
-                  <label>OpenAI API Key</label>
-                  <span className={settings?.has_openai_tts_key ? "chip ok" : "chip"}>
-                    Key tersimpan: {settings?.has_openai_tts_key ? "ya" : "tidak"}
-                  </span>
-                </div>
-                <div className="inline-row">
-                  <input
-                    type="password"
-                    value={openaiKey}
-                    placeholder={
-                      settings?.has_openai_tts_key
-                        ? "(biarkan kosong untuk mempertahankan)"
-                        : "tempel OpenAI API key"
-                    }
-                    onChange={(e) => setOpenaiKey(e.target.value)}
-                  />
-                  <button onClick={onTestTts} disabled={ttsTesting}>
-                    {ttsTesting ? "Menguji…" : "Tes Koneksi TTS"}
-                  </button>
-                </div>
-              </div>
+              <KeyField
+                label="OpenAI API Key"
+                stored={settings?.has_openai_tts_key}
+                value={openaiKey}
+                placeholderWhenEmpty="tempel OpenAI API key"
+                onChange={setOpenaiKey}
+                testLabel="Tes Koneksi TTS"
+                testing={ttsTesting}
+                onTest={onTestTts}
+              />
             )}
 
-            {ttsStatus && !ttsStatus.ok && <p className="error">{ttsStatus.error}</p>}
+            {ttsStatus && !ttsStatus.ok && (
+              <p className="text-sm text-destructive">{ttsStatus.error}</p>
+            )}
 
             {ttsProvider !== "browser" && voices.length > 0 && (
-              <div className="field">
-                <label>Karakter suara</label>
-                <div className="voice-row">
-                  <select value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
-                    {Object.entries(grouped).map(([type, vs]) => (
-                      <optgroup key={type} label={type}>
-                        {vs.map((v) => (
-                          <option key={v.name} value={v.name}>
-                            {v.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <button onClick={onPreview} disabled={previewing || !ttsVoice}>
-                    ▶ Preview
-                  </button>
+              <div className="grid gap-2">
+                <Label htmlFor="voice">Karakter suara</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Select value={ttsVoice} onValueChange={setTtsVoice}>
+                    <SelectTrigger
+                      id="voice"
+                      aria-label="Karakter suara"
+                      className="min-w-52 flex-1"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(grouped).map(([type, vs]) => (
+                        <SelectGroup key={type}>
+                          <SelectLabel>{type}</SelectLabel>
+                          {vs.map((v) => (
+                            <SelectItem key={v.name} value={v.name}>
+                              {v.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    onClick={onPreview}
+                    disabled={previewing || !ttsVoice}
+                  >
+                    <Play />
+                    Preview
+                  </Button>
                 </div>
               </div>
             )}
 
-            {previewErr && <p className="error">🔇 {previewErr}</p>}
-          </section>
+            {previewErr && <p className="text-sm text-destructive">🔇 {previewErr}</p>}
+          </Section>
 
           {/* ---------------- Suara ke teks ---------------- */}
-          <section id="diktasi" className="card card-lg">
-            <div className="section-head">
-              <div>
-                <h3>Suara ke Teks (STT)</h3>
-                <p>Cara jawaban lisan Anda diubah jadi teks sebelum dikirim ke penguji.</p>
-              </div>
-              {sttProvider !== "browser" && <span className={sttChip.cls}>{sttChip.label}</span>}
-            </div>
-
+          <Section
+            id="diktasi"
+            title="Suara ke Teks (STT)"
+            sub="Cara jawaban lisan Anda diubah jadi teks sebelum dikirim ke penguji."
+            aside={
+              sttProvider !== "browser" && <Chip tone={sttChip.tone}>{sttChip.label}</Chip>
+            }
+          >
             {settings?.effective_stt_shared && (
-              <p className="hint" style={{ marginTop: 0 }}>
+              <p className="text-xs text-muted-foreground">
                 Memakai diktasi dari host — key sendiri tidak dipakai selama tergabung.
               </p>
             )}
 
-            <div className="field">
-              <label>Provider Diktasi</label>
-              <select value={sttProvider} onChange={(e) => setSttProvider(e.target.value)}>
-                {STT_PROVIDERS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid gap-2">
+              <Label htmlFor="stt-provider">Provider Diktasi</Label>
+              <Select value={sttProvider} onValueChange={setSttProvider}>
+                <SelectTrigger
+                  id="stt-provider"
+                  aria-label="Provider Diktasi"
+                  className="w-full sm:w-96"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STT_PROVIDERS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {sttProvider === "browser" ? (
-              <p className="hint" style={{ marginTop: 0 }}>
-                Memakai Speech Recognition bawaan browser (gratis, tanpa key). Teks
-                muncul langsung saat Anda bicara, tapi akurasinya terbatas dan hanya
-                jalan di Chrome/Edge.
+              <p className="text-xs text-muted-foreground">
+                Memakai Speech Recognition bawaan browser (gratis, tanpa key). Teks muncul
+                langsung saat Anda bicara, tapi akurasinya terbatas dan hanya jalan di
+                Chrome/Edge.
               </p>
             ) : (
-              <div className="field">
-                <div className="label-row">
-                  <label>OpenAI API Key (STT)</label>
-                  <span className={settings?.has_openai_stt_key ? "chip ok" : "chip"}>
-                    Key tersimpan: {settings?.has_openai_stt_key ? "ya" : "tidak"}
-                  </span>
-                </div>
-                <div className="inline-row">
-                  <input
-                    type="password"
-                    value={sttKey}
-                    placeholder={
-                      settings?.has_openai_stt_key
-                        ? "(biarkan kosong untuk mempertahankan)"
-                        : "tempel OpenAI API key"
-                    }
-                    onChange={(e) => setSttKey(e.target.value)}
-                  />
-                  <button onClick={onTestStt} disabled={sttTesting}>
-                    {sttTesting ? "Menguji…" : "Tes Koneksi STT"}
-                  </button>
-                </div>
-                <p className="hint">
-                  Rekaman dikirim ke OpenAI (model whisper-1) setelah Anda menekan
-                  Berhenti, jadi teks tidak muncul real-time. Key ini terpisah dari
-                  key TTS.
-                </p>
-              </div>
-            )}
-
-            {sttStatus && !sttStatus.ok && <p className="error">{sttStatus.error}</p>}
-          </section>
-
-          {/* ---------------- Dokumen skripsi ---------------- */}
-          <section id="dokumen" className="card card-lg">
-            <div className="section-head">
               <div>
-                <h3>Skripsi (PDF)</h3>
-                <p>
-                  Sumber utama pertanyaan penguji. Unggah naskah terbaru agar
-                  pertanyaan tetap relevan.
+                <KeyField
+                  label="OpenAI API Key (STT)"
+                  stored={settings?.has_openai_stt_key}
+                  value={sttKey}
+                  placeholderWhenEmpty="tempel OpenAI API key"
+                  onChange={setSttKey}
+                  testLabel="Tes Koneksi STT"
+                  testing={sttTesting}
+                  onTest={onTestStt}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Rekaman dikirim ke OpenAI (model whisper-1) setelah Anda menekan
+                  Berhenti, jadi teks tidak muncul real-time. Key ini terpisah dari key
+                  TTS.
                 </p>
               </div>
-            </div>
-
-            {skripsi ? (
-              <div className="file-card">
-                <div className="file-icon" aria-hidden="true">PDF</div>
-                <div className="file-meta">
-                  <div className="file-name">{skripsi.filename}</div>
-                  <div className="file-sub">
-                    {nf.format(skripsi.char_count)} karakter
-                  </div>
-                </div>
-                <span className="chip ok">✓ Terindeks</span>
-                <button className="sm danger" onClick={onDeleteSkripsi}>
-                  Hapus
-                </button>
-              </div>
-            ) : (
-              <p className="empty-sub" style={{ marginTop: 0 }}>Belum ada skripsi.</p>
             )}
 
-            <div className="dropzone">
-              <strong>Pilih file PDF naskah skripsi</strong>
-              <input type="file" accept="application/pdf" onChange={onUpload} />
-            </div>
-          </section>
+            {sttStatus && !sttStatus.ok && (
+              <p className="text-sm text-destructive">{sttStatus.error}</p>
+            )}
+          </Section>
 
           {/* ---------------- Pemakaian token ---------------- */}
-          <section id="pemakaian" className="card card-lg">
-            <div className="section-head">
-              <div>
-                <h3>Pemakaian Token</h3>
-                <p>
-                  {usage?.since
-                    ? `Dihitung sejak ${new Date(usage.since).toLocaleString("id-ID")}. `
-                    : ""}
-                  Biaya hanya tersedia untuk OpenRouter; Claude tidak melaporkannya.
-                </p>
-              </div>
-              {usage && usage.total.calls > 0 && (
-                <button className="sm" onClick={onResetUsage}>
+          <Section
+            id="pemakaian"
+            title="Pemakaian Token"
+            sub={`${
+              usage?.since
+                ? `Dihitung sejak ${new Date(usage.since).toLocaleString("id-ID")}. `
+                : ""
+            }Biaya hanya tersedia untuk OpenRouter; Claude tidak melaporkannya.`}
+            aside={
+              usage &&
+              usage.total.calls > 0 && (
+                <Button variant="outline" size="sm" onClick={onResetUsage}>
                   Reset Penghitung
-                </button>
-              )}
-            </div>
-
+                </Button>
+              )
+            }
+          >
             {usage === null ? (
-              <p className="hint">Memuat…</p>
+              <p className="text-sm text-muted-foreground">Memuat…</p>
             ) : usage.total.calls === 0 ? (
-              <p className="hint">Belum ada pemakaian tercatat.</p>
+              <p className="text-sm text-muted-foreground">Belum ada pemakaian tercatat.</p>
             ) : (
               <>
-                <div className="usage-grid">
-                  <div className="usage-card">
-                    <span className="usage-label">Token input</span>
-                    <span className="usage-val">{nf.format(usage.total.input_tokens)}</span>
-                  </div>
-                  <div className="usage-card">
-                    <span className="usage-label">Token output</span>
-                    <span className="usage-val">{nf.format(usage.total.output_tokens)}</span>
-                  </div>
-                  <div className="usage-card">
-                    <span className="usage-label">Dari cache</span>
-                    <span className="usage-val">{nf.format(usage.total.cache_read_tokens)}</span>
-                  </div>
-                  <div className="usage-card">
-                    <span className="usage-label">Panggilan API</span>
-                    <span className="usage-val">{nf.format(usage.total.calls)}</span>
-                  </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <UsageCard label="Token input" value={usage.total.input_tokens} />
+                  <UsageCard label="Token output" value={usage.total.output_tokens} />
+                  <UsageCard label="Dari cache" value={usage.total.cache_read_tokens} />
+                  <UsageCard label="Panggilan API" value={usage.total.calls} />
                 </div>
 
-                <table className="usage-table">
-                  <thead>
-                    <tr>
-                      <th>Sumber</th>
-                      <th>Input</th>
-                      <th>Output</th>
-                      <th>Panggilan</th>
-                      <th>Biaya</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usage.by_kind.map(({ kind, totals }) => (
-                      <tr key={kind}>
-                        <td>{KIND_LABELS[kind] ?? kind}</td>
-                        <td>{nf.format(totals.input_tokens)}</td>
-                        <td>{nf.format(totals.output_tokens)}</td>
-                        <td>{nf.format(totals.calls)}</td>
-                        <td>{formatCost(totals.cost_usd)}</td>
-                      </tr>
-                    ))}
-                    <tr className="usage-total">
-                      <td>Total</td>
-                      <td>{nf.format(usage.total.input_tokens)}</td>
-                      <td>{nf.format(usage.total.output_tokens)}</td>
-                      <td>{nf.format(usage.total.calls)}</td>
-                      <td>{formatCost(usage.total.cost_usd)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sumber</TableHead>
+                        <TableHead>Input</TableHead>
+                        <TableHead>Output</TableHead>
+                        <TableHead>Panggilan</TableHead>
+                        <TableHead>Biaya</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {usage.by_kind.map(({ kind, totals }) => (
+                        <TableRow key={kind}>
+                          <TableCell>{KIND_LABELS[kind] ?? kind}</TableCell>
+                          <TableCell>{nf.format(totals.input_tokens)}</TableCell>
+                          <TableCell>{nf.format(totals.output_tokens)}</TableCell>
+                          <TableCell>{nf.format(totals.calls)}</TableCell>
+                          <TableCell>{formatCost(totals.cost_usd)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell>Total</TableCell>
+                        <TableCell>{nf.format(usage.total.input_tokens)}</TableCell>
+                        <TableCell>{nf.format(usage.total.output_tokens)}</TableCell>
+                        <TableCell>{nf.format(usage.total.calls)}</TableCell>
+                        <TableCell>{formatCost(usage.total.cost_usd)}</TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </div>
               </>
             )}
-          </section>
+          </Section>
 
           <CollabSettings />
 
-          {err && <p className="error">{err}</p>}
+          {err && (
+            <Alert variant="destructive">
+              <AlertDescription>{err}</AlertDescription>
+            </Alert>
+          )}
         </div>
       </div>
     </div>

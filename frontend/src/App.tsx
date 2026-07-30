@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LogOut } from "lucide-react";
 import {
   SessionPage,
   clearStoredSession,
@@ -24,6 +25,8 @@ import {
   setUnauthorizedHandler,
 } from "./api.js";
 import type { Assessment, User } from "./types.js";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Tab = "beranda" | "riwayat" | "pengaturan";
 
@@ -126,7 +129,7 @@ export default function App() {
     if (next === "beranda") setResumable(hasStoredSession());
   }
 
-  if (!ready) return <div className="app" />;
+  if (!ready) return <div className="min-h-dvh bg-background" />;
   if (!user) {
     return showAuth ? (
       <AuthPage onAuthed={setUser} onBack={() => setShowAuth(false)} />
@@ -136,30 +139,42 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <header className="masthead">
-        <div className="masthead-inner">
-          <div className="brand">
-            <img className="brand-mark" src="/sibiru-icon.svg" alt="" width={38} height={38} />
-            <div className="brand-text">
-              <h1 className="wordmark">SiBiru</h1>
-              <p className="tagline">Simulator Sidang Skripsi</p>
+    <div className="min-h-dvh bg-background">
+      <header className="sticky top-0 z-40 border-b bg-card/85 backdrop-blur-sm no-print">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <img src="/sibiru-icon.svg" alt="" width={34} height={34} />
+            <div className="leading-tight">
+              <h1 className="font-serif text-lg font-semibold tracking-tight">SiBiru</h1>
+              <p className="text-[11px] text-muted-foreground">Simulator Sidang Skripsi</p>
             </div>
           </div>
-          <nav className="tabs">
+
+          <nav className="ml-2 flex items-center gap-1 rounded-lg bg-muted p-1">
             {TABS.map((t) => (
               <button
                 key={t.key}
-                className={tab === t.key ? "primary" : ""}
                 onClick={() => goTab(t.key)}
+                aria-current={tab === t.key ? "page" : undefined}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  tab === t.key
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
               >
                 {t.label}
               </button>
             ))}
           </nav>
-          <span className="whoami">{user.username}</span>
-          <button
-            className="ghost"
+
+          <span className="ml-auto hidden text-sm text-muted-foreground sm:inline">
+            {user.username}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="max-sm:ml-auto"
             onClick={async () => {
               try {
                 await logout();
@@ -168,12 +183,13 @@ export default function App() {
               }
             }}
           >
+            <LogOut />
             Keluar
-          </button>
+          </Button>
         </div>
       </header>
 
-      <main className="shell">
+      <main className="mx-auto w-full max-w-6xl px-4 py-8">
         {tab === "beranda" &&
           (inSession ? (
             <SessionPage key={sitting} onClosed={showResult} onNewSession={() => {

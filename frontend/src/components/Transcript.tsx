@@ -1,6 +1,7 @@
 import type { Turn } from "../types.js";
 import type { Persona } from "../personas.js";
 import { renderInline } from "../lib/markdown.js";
+import { cn } from "@/lib/utils";
 
 // Shared bubble list for the live session and the history detail view, so the
 // examiner's markup renders the same way in both. A live session passes the
@@ -14,13 +15,41 @@ export function Transcript({ turns, persona }: { turns: Turn[]; persona?: Person
         const style =
           examiner && persona ? { background: persona.color, color: "#fff" } : undefined;
         return (
-          <div key={i} className={`turn ${t.role}`}>
-            <div className="turn-avatar" style={style} aria-hidden="true">
+          <div
+            key={i}
+            className={cn("flex items-start gap-3", !examiner && "flex-row-reverse")}
+          >
+            <div
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                examiner
+                  ? "bg-foreground text-background"
+                  : "bg-primary text-primary-foreground",
+              )}
+              style={style}
+              aria-hidden="true"
+            >
               {examiner ? (persona?.initials ?? "P") : "A"}
             </div>
-            <div className={`bubble ${t.role}`}>
-              <span className="who">{examiner ? "Penguji" : "Anda"}</span>
-              <span className="msg">{renderInline(t.content)}</span>
+            <div
+              className={cn(
+                "bubble max-w-[min(46rem,80%)] rounded-xl px-4 py-3 text-sm leading-relaxed",
+                examiner
+                  ? "rounded-tl-sm border bg-card text-card-foreground shadow-xs"
+                  : "rounded-tr-sm bg-primary text-primary-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "who mb-1 block text-[11px] font-bold tracking-wide uppercase",
+                  examiner ? "text-muted-foreground" : "text-primary-foreground/70",
+                )}
+              >
+                {examiner ? "Penguji" : "Anda"}
+              </span>
+              <span className="msg block [&_strong]:font-semibold">
+                {renderInline(t.content)}
+              </span>
             </div>
           </div>
         );

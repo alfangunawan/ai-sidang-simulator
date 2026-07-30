@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { UploadCloud } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Props {
   onFile: (file: File) => void;
@@ -19,7 +21,11 @@ export function Dropzone({ onFile, busy }: Props) {
 
   return (
     <label
-      className={`dropzone ${over ? "over" : ""} ${busy ? "busy" : ""}`}
+      className={cn(
+        "flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-input bg-muted/40 px-6 py-10 text-center transition-colors hover:border-primary/50 hover:bg-muted",
+        over && "border-primary bg-primary/5",
+        busy && "pointer-events-none opacity-60",
+      )}
       onDragOver={(e) => {
         e.preventDefault();
         setOver(true);
@@ -31,9 +37,13 @@ export function Dropzone({ onFile, busy }: Props) {
         take(e.dataTransfer.files?.[0]);
       }}
     >
-      <span className="dropzone-icon" aria-hidden="true">PDF</span>
-      <strong>{busy ? "Mengunggah…" : "Tarik file PDF skripsi ke sini"}</strong>
-      <span className="dropzone-sub">atau klik untuk memilih dari perangkat Anda</span>
+      <UploadCloud className="size-7 text-muted-foreground" aria-hidden="true" />
+      <strong className="text-sm font-semibold">
+        {busy ? "Mengunggah…" : "Tarik file PDF skripsi ke sini"}
+      </strong>
+      <span className="text-xs text-muted-foreground">
+        atau klik untuk memilih dari perangkat Anda
+      </span>
       <input
         type="file"
         accept="application/pdf"

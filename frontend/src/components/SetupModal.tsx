@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { Check, Mic, X } from "lucide-react";
 import { PERSONAS, DEFAULT_PERSONA, heatOf, heatLabel, TYPE_LABELS } from "../personas.js";
 import type { Persona } from "../personas.js";
 import { useAudioLevel } from "../hooks/useAudioLevel.js";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export type MicState = "idle" | "ok" | "fail";
 
@@ -78,34 +86,49 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
           : "Perangkat ini tidak mendukung perekaman.";
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Siapkan sidang">
-      <div className="modal sheet">
-        <div className="sheet-head">
-          <div className="sheet-title">
-            <span className="eyebrow">
+    <Dialog open onOpenChange={(next) => !next && onStep(0)}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[92dvh] gap-0 overflow-hidden p-0 sm:max-w-3xl"
+      >
+        <div className="flex items-start gap-4 border-b px-6 py-5">
+          <div className="flex-1">
+            <span className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
               {micOnly ? "Kesiapan" : `Langkah ${step} dari 2`}
             </span>
-            <h3>{step === 1 ? "Pilih dosen penguji Anda" : "Cek kesiapan Anda"}</h3>
+            <DialogTitle className="mt-1 font-serif text-xl">
+              {step === 1 ? "Pilih dosen penguji Anda" : "Cek kesiapan Anda"}
+            </DialogTitle>
           </div>
           {!micOnly && (
-            <div className="sheet-dots" aria-hidden="true">
-              <i className="on" />
-              <i className={step === 2 ? "on" : ""} />
+            <div className="mt-2 flex gap-1.5" aria-hidden="true">
+              <i className="h-1.5 w-6 rounded-full bg-primary" />
+              <i
+                className={cn(
+                  "h-1.5 w-6 rounded-full",
+                  step === 2 ? "bg-primary" : "bg-border",
+                )}
+              />
             </div>
           )}
-          <button className="ghost sheet-x" aria-label="Tutup" onClick={() => onStep(0)}>
-            ✕
-          </button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Tutup"
+            onClick={() => onStep(0)}
+          >
+            <X />
+          </Button>
         </div>
 
-        <div className="sheet-body">
+        <div className="overflow-y-auto px-6 py-5">
           {step === 1 ? (
             <>
-              <p className="sheet-lead">
+              <p className="mb-4 text-sm text-muted-foreground">
                 Tiap penguji punya gaya menekan dan bidang yang dikejar sendiri. Pilih
                 satu — ia yang akan menemani Anda sepanjang sidang.
               </p>
-              <div className="persona-grid">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {PERSONAS.map((p) => {
                   const on = p.key === pending.key;
                   const heat = heatOf(p);
@@ -113,27 +136,61 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
                     <button
                       key={p.key}
                       type="button"
-                      className={`persona-card ${on ? "on" : ""}`}
                       aria-pressed={on}
                       onClick={() => setPending(p)}
+                      className={cn(
+                        "rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm",
+                        on && "border-primary bg-primary/5 ring-2 ring-primary/20",
+                      )}
                     >
-                      <div className="persona-top">
-                        <div className="persona-avatar" style={{ background: p.color }}>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                          style={{ background: p.color }}
+                        >
                           {p.initials}
                         </div>
-                        <div className="persona-id">
-                          <span className="persona-name">{p.name}</span>
-                          <span className="persona-role">{p.role}</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">
+                            {p.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {p.role}
+                          </span>
                         </div>
-                        <span className="persona-pick" aria-hidden="true" />
-                      </div>
-                      <span className="persona-trait">{p.trait}</span>
-                      <div className="persona-foot">
-                        <span className={`heat heat-${heat}`} aria-hidden="true">
-                          <i /><i /><i /><i />
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "flex size-5 shrink-0 items-center justify-center rounded-full border",
+                            on
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-input",
+                          )}
+                        >
+                          {on && <Check className="size-3" />}
                         </span>
-                        <span className="heat-label">{heatLabel(p)}</span>
-                        <span className="persona-type">{TYPE_LABELS[p.type] ?? p.type}</span>
+                      </div>
+                      <span className="mt-3 block text-xs leading-relaxed text-muted-foreground">
+                        {p.trait}
+                      </span>
+                      <div className="mt-3 flex items-center gap-2 border-t pt-3">
+                        <span className="flex gap-0.5" aria-hidden="true">
+                          {[1, 2, 3, 4].map((n) => (
+                            <i
+                              key={n}
+                              className={cn(
+                                "h-1.5 w-3 rounded-full",
+                                n <= heat ? "bg-warning" : "bg-border",
+                              )}
+                            />
+                          ))}
+                        </span>
+                        <span className="text-[11px] font-semibold text-muted-foreground">
+                          {heatLabel(p)}
+                        </span>
+                        <span className="ml-auto truncate text-[11px] text-muted-foreground">
+                          {TYPE_LABELS[p.type] ?? p.type}
+                        </span>
                       </div>
                     </button>
                   );
@@ -141,40 +198,51 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
               </div>
             </>
           ) : (
-            <div className="stack-lg">
-              <ol className="rules">
+            <div className="flex flex-col gap-5">
+              <ol className="flex flex-col gap-3">
                 {RULES.map((text, i) => (
-                  <li key={i}>
-                    <span className="rule-n">{String(i + 1).padStart(2, "0")}</span>
-                    <span>{text}</span>
+                  <li key={i} className="flex gap-3 text-sm">
+                    <span className="font-mono text-xs font-bold text-primary">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="text-muted-foreground">{text}</span>
                   </li>
                 ))}
               </ol>
 
-              <div className="mic-test">
-                <div className="mic-test-head">
-                  <div>
-                    <div className="mic-test-title">
-                      Tes mikrofon <span>— opsional, 4 detik</span>
+              <div className="rounded-xl border bg-muted/40 p-4">
+                <div className="flex items-start gap-4">
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold">
+                      Tes mikrofon{" "}
+                      <span className="font-normal text-muted-foreground">
+                        — opsional, 4 detik
+                      </span>
                     </div>
-                    <div className="mic-test-sub">
+                    <div className="mt-1 text-xs text-muted-foreground">
                       Bicara seperti biasa untuk memastikan suara Anda terdengar jelas
                       sebelum sidang dimulai.
                     </div>
                   </div>
-                  <button
-                    className={`rec ${testing ? "on" : ""}`}
+                  <Button
+                    size="sm"
+                    variant={testing ? "destructive" : "outline"}
                     disabled={testing || !audio.supported}
                     onClick={() => setTesting(true)}
                   >
+                    <Mic />
                     {testing ? "Merekam…" : mic === "idle" ? "Tes Mic" : "Ulangi tes"}
-                  </button>
+                  </Button>
                 </div>
-                <div className="mic-test-meter">
-                  <div className={`wave ${testing ? "on" : ""}`} aria-hidden="true">
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex h-8 flex-1 items-center gap-[3px]" aria-hidden="true">
                     {MIC_BARS.map((b, i) => (
                       <span
                         key={i}
+                        className={cn(
+                          "w-1 rounded-full bg-border",
+                          testing && "animate-pulse bg-primary",
+                        )}
                         style={{
                           height: `${b.height}px`,
                           animationDelay: `${b.delay}s`,
@@ -184,52 +252,59 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
                     ))}
                   </div>
                   <span
-                    className={`mic-note ${testing ? "live" : mic === "ok" ? "ok" : mic === "fail" ? "bad" : ""}`}
+                    className={cn(
+                      "text-xs font-semibold",
+                      testing
+                        ? "text-primary"
+                        : mic === "ok"
+                          ? "text-success"
+                          : mic === "fail"
+                            ? "text-destructive"
+                            : "text-muted-foreground",
+                    )}
                   >
                     {micNote}
                   </span>
                 </div>
               </div>
 
-              <ul className="privacy">
+              <ul className="flex flex-col gap-1.5 text-xs text-muted-foreground">
                 {PRIVACY.map((text, i) => (
-                  <li key={i}>{text}</li>
+                  <li key={i} className="flex gap-2">
+                    <span aria-hidden="true">·</span>
+                    {text}
+                  </li>
                 ))}
               </ul>
             </div>
           )}
         </div>
 
-        <div className="sheet-foot">
-          <span className="sheet-note">
+        <div className="flex items-center gap-3 border-t bg-muted/30 px-6 py-4">
+          <span className="flex-1 truncate text-xs text-muted-foreground">
             {micOnly
               ? "Tes ini tidak memulai sidang."
               : step === 1
                 ? "Penguji terkunci sampai sidang selesai."
                 : `Penguji: ${pending.name}`}
           </span>
-          <div className="sheet-actions">
-            {micOnly ? (
-              <button className="primary" onClick={() => onStep(0)}>
-                Tutup
-              </button>
-            ) : (
-              <>
-                <button onClick={() => onStep(step === 2 ? 1 : 0)}>
-                  {step === 1 ? "Batal" : "Kembali"}
-                </button>
-                <button
-                  className="primary"
-                  disabled={starting}
-                  onClick={() => (step === 1 ? onStep(2) : onStart(pending))}
-                >
-                  {step === 1 ? "Lanjut" : starting ? "Menyiapkan…" : "Mulai Sidang"}
-                </button>
-              </>
-            )}
-          </div>
+          {micOnly ? (
+            <Button onClick={() => onStep(0)}>Tutup</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onStep(step === 2 ? 1 : 0)}>
+                {step === 1 ? "Batal" : "Kembali"}
+              </Button>
+              <Button
+                disabled={starting}
+                onClick={() => (step === 1 ? onStep(2) : onStart(pending))}
+              >
+                {step === 1 ? "Lanjut" : starting ? "Menyiapkan…" : "Mulai Sidang"}
+              </Button>
+            </>
+          )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
