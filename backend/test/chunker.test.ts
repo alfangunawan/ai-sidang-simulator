@@ -85,4 +85,29 @@ describe("chunkPages", () => {
     expect(chunkPages([])).toEqual([]);
     expect(chunkPages(["", "   "])).toEqual([]);
   });
+
+  // Diukur pada dua naskah asli: indeks PDF mendahului nomor cetak 21 dan 19
+  // halaman. Penguji menyitir nomor cetak (lewat dossier) dan indeks PDF (lewat
+  // kutipan chunk) dalam napas yang sama, lalu menuduh mahasiswa salah halaman.
+  it("uses the printed folio, not the PDF index, once the sequence starts", () => {
+    const chunks = chunkPages([
+      `KATA PENGANTAR\n${para(20)}`,
+      `DAFTAR ISI\n${para(20)}`,
+      `1\nBAB I PENDAHULUAN\n${para(20)}`,
+      `2\n${para(20)}`,
+      `3\n${para(20)}`,
+    ]);
+    expect(chunks[0].page).toBe(1);
+    expect(chunks[chunks.length - 1].page).toBe(3);
+  });
+
+  it("ignores a stray leading number that does not continue the sequence", () => {
+    const chunks = chunkPages([
+      `1\nBAB IV HASIL\n${para(20)}`,
+      `2\n${para(20)}`,
+      // Nomor tabel di kepala halaman, bukan folio.
+      `7 Tipe Use Case Ref Tujuan Pengujian\n${para(20)}`,
+    ]);
+    expect(chunks[chunks.length - 1].page).toBe(3);
+  });
 });

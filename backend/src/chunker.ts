@@ -126,12 +126,46 @@ function packPage(
   return { chunks, heading };
 }
 
+/**
+ * Nomor halaman cetak di kepala halaman. unpdf mengekstraknya sebagai token
+ * pertama teks halaman, dan nomor ITU yang dilihat mahasiswa di naskahnya —
+ * indeks PDF berbeda darinya sebanyak tebal halaman depan (21 dan 19 halaman
+ * pada dua naskah yang diuji).
+ *
+ * Tanpa ini penguji menyitir dua sistem penomoran sekaligus dalam satu giliran:
+ * dossier dibaca dari teks jadi ia memakai nomor cetak, sedangkan kutipan
+ * chunk memakai indeks PDF. Terlihat di transkrip nyata — penguji menuduh
+ * mahasiswa salah halaman selama 8 giliran berturut-turut atas beda 21 itu.
+ */
+const FOLIO = /^\s*(\d{1,4})(?!\S)/;
+
+function folioAt(pages: string[], p: number): number | null {
+  const m = FOLIO.exec(pages[p] ?? "");
+  return m ? Number(m[1]) : null;
+}
+
 export function chunkPages(pages: string[]): Chunk[] {
   const out: Chunk[] = [];
   let dropping = false;
   let heading: string | null = null;
+  // Selisih indeks PDF terhadap nomor cetak, sekali ketemu dipakai seterusnya.
+  let offset: number | null = null;
 
   for (let p = 0; p < pages.length; p++) {
+    // Dihitung sebelum penyaringan halaman: halaman depan yang dibuang tetap
+    // menggeser penomoran, jadi offset harus ikut berjalan melewatinya.
+    const folio = folioAt(pages, p);
+    const expected: number | null = offset === null ? null : p + 1 - offset;
+    // Deret dimulai hanya bila halaman berikutnya melanjutkan hitungan. Tanpa
+    // syarat itu satu angka nyasar di kepala halaman (nomor tabel, sisa header)
+    // cukup untuk menggeser penomoran seluruh naskah.
+    const starts = expected === null && folio !== null && folioAt(pages, p + 1) === folio + 1;
+    let page = expected ?? p + 1;
+    if (folio !== null && (starts || folio === expected)) {
+      page = folio;
+      offset = p + 1 - folio;
+    }
+
     const marker = pageMarker(pages[p]);
     if (marker === "resume") dropping = false;
     else if (marker === "drop") dropping = true;
@@ -141,7 +175,7 @@ export function chunkPages(pages: string[]): Chunk[] {
     heading = packed.heading;
     for (const c of packed.chunks) {
       if (c.text.trim().length < MIN_CHUNK) continue;
-      out.push({ idx: out.length, page: p + 1, heading: c.heading, text: c.text.trim() });
+      out.push({ idx: out.length, page, heading: c.heading, text: c.text.trim() });
     }
   }
   return out;
