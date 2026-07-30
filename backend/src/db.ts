@@ -43,6 +43,18 @@ CREATE TABLE IF NOT EXISTS documents (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS chunks (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL,
+  idx         INTEGER NOT NULL,
+  page        INTEGER,
+  heading     TEXT,
+  text        TEXT NOT NULL,
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(document_id, idx);
+
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE NOT NULL,
@@ -64,6 +76,26 @@ CREATE TABLE IF NOT EXISTS user_settings (
   value TEXT,
   PRIMARY KEY (user_id, key),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS collaborations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  host_user_id INTEGER NOT NULL UNIQUE,
+  invite_code TEXT NOT NULL UNIQUE,
+  share_ai INTEGER NOT NULL DEFAULT 0,
+  share_tts INTEGER NOT NULL DEFAULT 0,
+  share_stt INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (host_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS collaboration_members (
+  collaboration_id INTEGER NOT NULL,
+  member_user_id INTEGER NOT NULL UNIQUE,
+  joined_at TEXT NOT NULL,
+  PRIMARY KEY (collaboration_id, member_user_id),
+  FOREIGN KEY (collaboration_id) REFERENCES collaborations(id) ON DELETE CASCADE,
+  FOREIGN KEY (member_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 `;
 
@@ -89,6 +121,12 @@ export function openDb(path: string): Database.Database {
   addColumnIfMissing(db, "sessions", "close_declined_turn", "close_declined_turn INTEGER");
   addColumnIfMissing(db, "sessions", "user_id", "user_id INTEGER");
   addColumnIfMissing(db, "documents", "user_id", "user_id INTEGER");
+  addColumnIfMissing(db, "documents", "dossier", "dossier TEXT");
+  addColumnIfMissing(db, "documents", "dossier_status", "dossier_status TEXT");
+  addColumnIfMissing(db, "documents", "dossier_error", "dossier_error TEXT");
+  addColumnIfMissing(db, "documents", "dossier_version", "dossier_version INTEGER");
+  addColumnIfMissing(db, "documents", "dossier_model", "dossier_model TEXT");
   addColumnIfMissing(db, "usage_events", "user_id", "user_id INTEGER");
+  addColumnIfMissing(db, "usage_events", "key_owner_user_id", "key_owner_user_id INTEGER");
   return db;
 }

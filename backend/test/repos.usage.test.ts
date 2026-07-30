@@ -41,9 +41,9 @@ describe("usage repo", () => {
   it("sums across calls and splits the totals by kind", () => {
     const db = openDb(":memory:");
     const u = seedUser(db);
-    recordUsage(db, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", usage());
-    recordUsage(db, u, "2026-01-01T00:01:00Z", "claude", "m", "turn", usage({ cache_read_tokens: 900 }));
-    recordUsage(db, u, "2026-01-01T00:02:00Z", "claude", "m", "assessment", usage({ output_tokens: 400 }));
+    recordUsage(db, u, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", usage());
+    recordUsage(db, u, u, "2026-01-01T00:01:00Z", "claude", "m", "turn", usage({ cache_read_tokens: 900 }));
+    recordUsage(db, u, u, "2026-01-01T00:02:00Z", "claude", "m", "assessment", usage({ output_tokens: 400 }));
 
     const view = getUsageView(db, u);
     expect(view.total.input_tokens).toBe(3000);
@@ -61,7 +61,7 @@ describe("usage repo", () => {
   it("ignores a call that reported no usage", () => {
     const db = openDb(":memory:");
     const u = seedUser(db);
-    recordUsage(db, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", undefined);
+    recordUsage(db, u, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", undefined);
     expect(getUsageView(db, u).total.calls).toBe(0);
   });
 
@@ -71,7 +71,7 @@ describe("usage repo", () => {
     db.exec("DROP TABLE usage_events");
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() =>
-      recordUsage(db, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", usage()),
+      recordUsage(db, u, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", usage()),
     ).not.toThrow();
     expect(spy).toHaveBeenCalled();
   });
@@ -79,7 +79,7 @@ describe("usage repo", () => {
   it("reset clears every recorded event", () => {
     const db = openDb(":memory:");
     const u = seedUser(db);
-    recordUsage(db, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", usage());
+    recordUsage(db, u, u, "2026-01-01T00:00:00Z", "claude", "m", "turn", usage());
     resetUsage(db, u);
     expect(getUsageView(db, u).total.calls).toBe(0);
   });

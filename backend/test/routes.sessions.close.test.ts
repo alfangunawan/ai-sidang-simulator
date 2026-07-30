@@ -6,6 +6,9 @@ import { buildApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
 import { saveSettings } from "../src/repos/settings.js";
 import { replaceDocument } from "../src/repos/documents.js";
+import { seedDossier, SAMPLE_DOSSIER } from "./fixtures/dossier.js";
+import { replaceChunks } from "../src/repos/chunks.js";
+import { setDossierPending } from "../src/repos/documents.js";
 import { ASSESSMENT_MAX_TOKENS } from "../src/providers/types.js";
 
 afterEach(() => vi.restoreAllMocks());
@@ -21,6 +24,10 @@ const ASSESSMENT_JSON = JSON.stringify({
 });
 
 async function ready() {
+  return (await readyWithDb()).agent;
+}
+
+async function readyWithDb() {
   const db = openDb(":memory:");
   const key = randomBytes(32);
   const app = buildApp(db, key);
@@ -30,8 +37,15 @@ async function ready() {
     .send({ username: "tester", password: "password1" });
   const userId = body.user.id;
   saveSettings(db, userId, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
-  replaceDocument(db, userId, "thesis.pdf", "ISI", "2026-01-01T00:00:00Z");
-  return agent;
+  const documentId = replaceDocument(
+    db,
+    userId,
+    "thesis.pdf",
+    "NASKAH LENGKAP YANG TIDAK BOLEH DIKIRIM",
+    "2026-01-01T00:00:00Z",
+  );
+  seedDossier(db, documentId);
+  return { agent, db, documentId };
 }
 
 function stubOnce(contents: string[]) {
@@ -146,5 +160,72 @@ describe("close/continue/result routes", () => {
     const cont = await agent.post(`/sessions/${id}/continue`).send({});
     expect(cont.status).toBe(200);
     expect(cont.body).toEqual({ ok: true });
+  });
+});
+
+describe("close route — dossier instead of the full thesis", () => {
+  it("sends the dossier and retrieved excerpts, never the full text", async () => {
+    const sent: any[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: any) => {
+        sent.push(JSON.parse(init.body));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: ASSESSMENT_JSON } }] }),
+        };
+      }) as any,
+    );
+    const { agent, db, documentId } = await readyWithDb();
+    replaceChunks(db, documentId, [
+      { idx: 0, page: 62, heading: "BAB IV HASIL", text: "Skor SUS 78 dari 20 responden mahasiswa." },
+      { idx: 1, page: 9, heading: "BAB I", text: "Bagian yang tidak dibahas sama sekali di sidang." },
+    ]);
+    const id = (await agent.post("/sessions").send({})).body.session_id;
+    await agent.post(`/sessions/${id}/close`).send({});
+
+    const user = sent[0].messages.find((m: any) => m.role === "user").content;
+    // Naskah utuh 147k token adalah yang justru sedang dihapus.
+    expect(user).not.toContain("NASKAH LENGKAP YANG TIDAK BOLEH DIKIRIM");
+    expect(user).toContain(SAMPLE_DOSSIER.judul);
+    expect(user).toContain("TRANSKRIP SIDANG:");
+  });
+
+  it("picks excerpts by what the sidang actually discussed", async () => {
+    const sent: any[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: any) => {
+        sent.push(JSON.parse(init.body));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: ASSESSMENT_JSON } }] }),
+        };
+      }) as any,
+    );
+    const { agent, db, documentId } = await readyWithDb();
+    replaceChunks(db, documentId, [
+      { idx: 0, page: 62, heading: "BAB IV", text: "Pengujian SUS melibatkan 20 responden mahasiswa." },
+      { idx: 1, page: 9, heading: "BAB I", text: "Kajian tentang fotosintesis tumbuhan tropis." },
+    ]);
+    const id = (await agent.post("/sessions").send({})).body.session_id;
+    await agent.post(`/sessions/${id}/turn`).send({ transcript: "Skor SUS saya 78 dari 20 responden." });
+    await agent.post(`/sessions/${id}/close`).send({});
+
+    const user = sent[sent.length - 1].messages.find((m: any) => m.role === "user").content;
+    expect(user).toContain("KUTIPAN NASKAH TERKAIT:");
+    expect(user).toContain("responden mahasiswa");
+    expect(user).not.toContain("fotosintesis");
+  });
+
+  it("refuses to score while the dossier is not ready", async () => {
+    const { agent, db, documentId } = await readyWithDb();
+    const id = (await agent.post("/sessions").send({})).body.session_id;
+    setDossierPending(db, documentId);
+    const res = await agent.post(`/sessions/${id}/close`).send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Dossier skripsi belum siap/);
   });
 });

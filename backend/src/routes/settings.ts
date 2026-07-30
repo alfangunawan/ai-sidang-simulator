@@ -8,13 +8,37 @@ import {
 } from "../repos/settings.js";
 import { getProvider } from "../providers/index.js";
 import { getUsageView, resetUsage } from "../repos/usage.js";
+import { resolveSourceUser, getEffectiveTtsConfig } from "../effectiveConfig.js";
 
 export function settingsRouter(db: Database.Database, key: Buffer): Router {
   const r = Router();
 
   r.get("/", (req, res) => {
     const userId = req.userId!;
-    res.json(getSettingsView(db, userId));
+    const view = getSettingsView(db, userId);
+    const aiSrc = resolveSourceUser(db, userId, "ai");
+    const ttsSrc = resolveSourceUser(db, userId, "tts");
+    const sttSrc = resolveSourceUser(db, userId, "stt");
+    let eff_tts_provider = view.tts_provider;
+    let eff_tts_voice = view.tts_voice;
+    if (ttsSrc !== userId) {
+      try {
+        const t = getEffectiveTtsConfig(db, userId, key);
+        eff_tts_provider = t.provider;
+        eff_tts_voice = t.voice;
+      } catch {
+        /* host cfg incomplete → keep own */
+      }
+    }
+    res.json({
+      ...view,
+      effective_ai_shared: aiSrc !== userId,
+      effective_tts_shared: ttsSrc !== userId,
+      effective_stt_shared: sttSrc !== userId,
+      effective_tts_provider: eff_tts_provider,
+      effective_tts_voice: eff_tts_voice,
+      effective_stt_provider: getSetting(db, sttSrc, "stt_provider") ?? "browser",
+    });
   });
 
   r.post("/", (req, res) => {

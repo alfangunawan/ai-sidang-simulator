@@ -2,9 +2,14 @@ import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getProvider } from "../providers/index.js";
-import { getActiveConfig, getSetting } from "../repos/settings.js";
-import { getActiveDocument } from "../repos/documents.js";
+import { getSetting } from "../repos/settings.js";
+import { getEffectiveLlmConfig, resolveSourceUser } from "../effectiveConfig.js";
+import { getActiveDocument, getDossierRow } from "../repos/documents.js";
+import { getChunks } from "../repos/chunks.js";
 import { buildPersona } from "../persona.js";
+import { buildPhaseBlock } from "../questionBank.js";
+import { formatDossier, type Dossier } from "../dossier.js";
+import { retrieve, formatExcerpts, formatChunks } from "../retrieval.js";
 import {
   createSession,
   listSessions,
@@ -76,12 +81,23 @@ export function sessionsRouter(
     if (!transcript) {
       return res.status(400).json({ error: "Transkrip kosong" });
     }
-    if (getSetting(db, userId, "api_key") === null) {
-      return res.status(400).json({ error: "Set API key di Settings dulu" });
+    if (getSetting(db, resolveSourceUser(db, userId, "ai"), "api_key") === null) {
+      return res.status(400).json({ error: "Set API key di Settings dulu (atau gabung kolaborasi yang membagikan AI)" });
     }
     const doc = getActiveDocument(db, userId);
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
+    }
+    const dossierRow = getDossierRow(db, doc.id);
+    // Tidak ada jatuh-balik diam-diam ke full_text: itu menyembunyikan kegagalan
+    // dan mengembalikan biaya 147k token per giliran tanpa user tahu.
+    if (dossierRow?.dossier_status !== "ready" || !dossierRow.dossier) {
+      return res.status(400).json({
+        error:
+          dossierRow?.dossier_status === "pending"
+            ? "Skripsi masih dianalisis — tunggu sebentar lalu coba lagi"
+            : "Dossier skripsi belum siap. Buka Pengaturan untuk membangun ulang.",
+      });
     }
 
     let userTurnNumber: number | undefined;
@@ -90,23 +106,42 @@ export function sessionsRouter(
       userTurnNumber = nextTurnNumber(db, sessionId);
       addTurn(db, sessionId, userTurnNumber, "user", transcript, now());
 
-      const cfg = getActiveConfig(db, userId, key);
+      const cfg = getEffectiveLlmConfig(db, userId, key);
       const provider = getProvider(cfg);
       const personaAttack = buildPersona(
         cfg.examinerMode,
         cfg.attackPoints,
         cfg.examinerType,
       );
-      // The nudge steers the model only; the transcript keeps what was actually said.
-      const result = await provider.sendTurn(
-        personaAttack,
-        doc.full_text,
-        history,
-        withNonAnswerNudge(transcript),
+      const parsedDossier = JSON.parse(dossierRow.dossier) as Dossier;
+      const dossier = formatDossier(parsedDossier);
+      // Blok fase: contoh pertanyaan untuk fase terdekat + modul kritik yang
+      // benar-benar dipicu skripsi ini. Ditaruh setelah blok yang di-cache.
+      const phaseBlock = buildPhaseBlock(
+        countExaminerTurns(db, sessionId),
+        parsedDossier.modul_kritik_terpicu,
       );
 
+      // Kueri retrieval memakai pertanyaan penguji terakhir DAN jawaban
+      // mahasiswa: pertanyaannya yang menetapkan topik, jawabannya yang
+      // menentukan bagian naskah mana yang perlu dikonfrontasi.
+      const lastExaminer = [...history].reverse().find((t) => t.role === "examiner");
+      const excerpts = retrieve(
+        getChunks(db, doc.id),
+        `${lastExaminer?.content ?? ""} ${transcript}`,
+      );
+
+      // The nudge steers the model only; the transcript keeps what was actually said.
+      const result = await provider.sendTurn({
+        persona: personaAttack,
+        dossier,
+        phaseBlock,
+        history,
+        userInput: withNonAnswerNudge(transcript) + formatExcerpts(excerpts),
+      });
+
       // Recorded before the empty-reply guard: the call was billed either way.
-      recordUsage(db, userId, now(), cfg.provider, cfg.model, "turn", result.usage);
+      recordUsage(db, userId, resolveSourceUser(db, userId, "ai"), now(), cfg.provider, cfg.model, "turn", result.usage);
 
       const { reply, hasMarker } = stripCloseMarker(result.reply);
 
@@ -166,25 +201,41 @@ export function sessionsRouter(
     if (meta?.status === "closed" && meta.assessment) {
       return res.json({ assessment: JSON.parse(meta.assessment) as Assessment });
     }
-    if (getSetting(db, userId, "api_key") === null) {
-      return res.status(400).json({ error: "Set API key di Settings dulu" });
+    if (getSetting(db, resolveSourceUser(db, userId, "ai"), "api_key") === null) {
+      return res.status(400).json({ error: "Set API key di Settings dulu (atau gabung kolaborasi yang membagikan AI)" });
     }
     const doc = getActiveDocument(db, userId);
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
+    const closeDossier = getDossierRow(db, doc.id);
+    if (closeDossier?.dossier_status !== "ready" || !closeDossier.dossier) {
+      return res.status(400).json({
+        error: "Dossier skripsi belum siap. Buka Pengaturan untuk membangun ulang.",
+      });
+    }
 
     try {
-      const cfg = getActiveConfig(db, userId, key);
+      const cfg = getEffectiveLlmConfig(db, userId, key);
       const provider = getProvider(cfg);
       const system = buildAssessmentSystem();
-      const user = buildAssessmentUser(doc.full_text, formatTranscript(getTurns(db, sessionId)));
+      const transcript = formatTranscript(getTurns(db, sessionId));
+      // Bagian naskah yang paling menyangkut apa yang benar-benar dibahas.
+      // PRD §8 menyebut "chunk paling sering ter-retrieve selama sesi"; satu
+      // pencarian dengan transkrip penuh sebagai kueri memberi hasil yang sama
+      // tanpa harus mencatat riwayat retrieval tiap giliran.
+      const excerpts = retrieve(getChunks(db, doc.id), transcript, 5);
+      const user = buildAssessmentUser(
+        formatDossier(JSON.parse(closeDossier.dossier) as Dossier),
+        transcript,
+        formatChunks(excerpts),
+      );
 
       // Every attempt is billed, so each one is recorded — including the one
       // whose output failed to parse.
       const attempt = async () => {
         const out = await provider.generate(system, user, ASSESSMENT_MAX_TOKENS);
-        recordUsage(db, userId, now(), cfg.provider, cfg.model, "assessment", out.usage);
+        recordUsage(db, userId, resolveSourceUser(db, userId, "ai"), now(), cfg.provider, cfg.model, "assessment", out.usage);
         if (out.truncated) throw new Error(TRUNCATED);
         return parseAssessment(out.text);
       };

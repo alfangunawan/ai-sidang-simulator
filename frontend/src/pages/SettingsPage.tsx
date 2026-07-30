@@ -12,6 +12,9 @@ import {
   ttsPreview,
   getUsage,
   resetUsage,
+  getDossier,
+  saveDossier,
+  rebuildDossier,
 } from "../api.js";
 import type {
   SettingsView,
@@ -19,13 +22,17 @@ import type {
   TtsVoice,
   TestResult,
   UsageView,
+  DossierView,
+  DossierStatus,
 } from "../types.js";
+import { CollabSettings } from "./CollabSettings.js";
 
 const PREVIEW_SAMPLE = "Halo, ini contoh suara penguji sidang.";
 
 const KIND_LABELS: Record<string, string> = {
   turn: "Tanya jawab",
   assessment: "Penilaian akhir",
+  dossier: "Baca skripsi",
 };
 
 const nf = new Intl.NumberFormat("id-ID");
@@ -59,6 +66,7 @@ const NAV = [
   { href: "#diktasi", label: "Suara ke teks" },
   { href: "#dokumen", label: "Dokumen skripsi" },
   { href: "#pemakaian", label: "Pemakaian token" },
+  { href: "#kolaborasi", label: "Kolaborasi" },
 ];
 
 // One chip per connection: neutral before a test, then the test's verdict.
@@ -73,6 +81,12 @@ function statusChip(
     ? { cls: "chip ok", label: `✓ ${okLabel}` }
     : { cls: "chip bad", label: "✗ Gagal" };
 }
+
+const DOSSIER_CHIP: Record<DossierStatus, { cls: string; label: string }> = {
+  pending: { cls: "chip", label: "⏳ Menganalisis" },
+  ready: { cls: "chip ok", label: "✓ Siap" },
+  failed: { cls: "chip bad", label: "✗ Gagal" },
+};
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsView | null>(null);
@@ -99,6 +113,10 @@ export function SettingsPage() {
   const [previewErr, setPreviewErr] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [usage, setUsage] = useState<UsageView | null>(null);
+  const [dossier, setDossier] = useState<DossierView | null>(null);
+  const [poinDraft, setPoinDraft] = useState("");
+  const [savingDossier, setSavingDossier] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -111,8 +129,56 @@ export function SettingsPage() {
       setSttProvider(s.stt_provider ?? "browser");
     });
     getSkripsi().then(setSkripsi);
+    loadDossier();
     getUsage().then(setUsage).catch(() => {});
   }, []);
+
+  async function loadDossier() {
+    const d = await getDossier().catch(() => null);
+    setDossier(d);
+    if (d?.dossier) setPoinDraft(d.dossier.poin_serangan.join("\n"));
+    return d;
+  }
+
+  // Pembangunan dossier berjalan di luar request upload, jadi status barunya
+  // hanya bisa diketahui dengan menanya ulang.
+  useEffect(() => {
+    if (dossier?.status !== "pending") return;
+    const t = setInterval(loadDossier, 3000);
+    return () => clearInterval(t);
+  }, [dossier?.status]);
+
+  async function onSavePoin() {
+    if (!dossier?.dossier) return;
+    setErr(null);
+    setMsg(null);
+    setSavingDossier(true);
+    try {
+      const saved = await saveDossier({
+        ...dossier.dossier,
+        poin_serangan: poinDraft.split("\n").map((s) => s.trim()).filter(Boolean),
+      });
+      setDossier({ ...dossier, dossier: saved });
+      setMsg("Poin serangan disimpan.");
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+    setSavingDossier(false);
+  }
+
+  async function onRebuildDossier() {
+    setErr(null);
+    setMsg(null);
+    setRebuilding(true);
+    try {
+      await rebuildDossier();
+      await loadDossier();
+      setMsg("Membaca ulang skripsi…");
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+    setRebuilding(false);
+  }
 
   // Load the voice list whenever a server-side TTS provider is selected.
   useEffect(() => {
@@ -245,7 +311,8 @@ export function SettingsPage() {
     setMsg(null);
     try {
       setSkripsi(await uploadSkripsi(file));
-      setMsg("Skripsi diunggah.");
+      await loadDossier();
+      setMsg("Skripsi diunggah. Sedang dibaca untuk menyusun poin serangan.");
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -258,6 +325,8 @@ export function SettingsPage() {
     try {
       await deleteSkripsi();
       setSkripsi(null);
+      setDossier(null);
+      setPoinDraft("");
       setMsg("Skripsi dihapus.");
     } catch (e) {
       setErr((e as Error).message);
@@ -365,6 +434,11 @@ export function SettingsPage() {
                 Key disimpan di server lokal Anda dan hanya dipakai untuk memanggil
                 provider yang dipilih.
               </p>
+              {settings?.effective_ai_shared && (
+                <p className="hint">
+                  Memakai AI dari host — key sendiri tidak dipakai selama tergabung.
+                </p>
+              )}
               {llmStatus && !llmStatus.ok && <p className="error">{llmStatus.error}</p>}
             </div>
           </section>
@@ -375,23 +449,93 @@ export function SettingsPage() {
               <div>
                 <h3>Perilaku penguji</h3>
                 <p>
-                  Arahkan fokus serangan penguji, atau biarkan kosong agar
-                  pertanyaan murni dari isi skripsi.
+                  Poin serangan dibaca otomatis dari naskah saat skripsi diunggah.
+                  Sunting bila ada yang meleset atau ingin Anda tambahkan.
                 </p>
               </div>
+              {dossier?.status && (
+                <span className={DOSSIER_CHIP[dossier.status].cls}>
+                  {DOSSIER_CHIP[dossier.status].label}
+                </span>
+              )}
             </div>
-            <div className="field">
-              <label>
-                Poin Serangan Penguji <span style={{ fontWeight: 500, color: "var(--faint)" }}>— opsional</span>
-              </label>
-              <textarea
-                rows={8}
-                value={attackPoints}
-                placeholder="(opsional) Tempel poin serangan spesifik yang ingin dikejar penguji — mis. kelemahan Bab 3, klaim yang perlu bukti. Kosongkan untuk pertanyaan murni berbasis isi skripsi."
-                onChange={(e) => setAttackPoints(e.target.value)}
-              />
-              <p className="hint">Pisahkan tiap poin dengan baris baru.</p>
-            </div>
+
+            {!skripsi && (
+              <p className="empty-sub" style={{ marginTop: 0 }}>
+                Unggah skripsi dulu di bagian Dokumen skripsi.
+              </p>
+            )}
+
+            {skripsi && dossier?.status === "pending" && (
+              <p className="hint" style={{ marginTop: 0 }}>
+                Membaca naskah dan menyusun poin serangan. Butuh sekitar satu menit —
+                sidang belum bisa dimulai sampai selesai.
+              </p>
+            )}
+
+            {skripsi && dossier?.status === "failed" && (
+              <p className="err" style={{ marginTop: 0 }}>
+                {dossier.error ?? "Gagal membaca skripsi."}
+              </p>
+            )}
+
+            {skripsi && dossier?.dossier && (
+              <>
+                <div className="field">
+                  <label>Poin Serangan Penguji</label>
+                  <textarea
+                    rows={8}
+                    value={poinDraft}
+                    placeholder="Satu poin per baris."
+                    onChange={(e) => setPoinDraft(e.target.value)}
+                  />
+                  <p className="hint">
+                    Pisahkan tiap poin dengan baris baru. Kosongkan agar pertanyaan
+                    murni dari isi skripsi.
+                  </p>
+                </div>
+                <div className="row">
+                  <button className="primary" disabled={savingDossier} onClick={onSavePoin}>
+                    {savingDossier ? "Menyimpan…" : "Simpan poin serangan"}
+                  </button>
+                </div>
+                <dl className="dossier-facts">
+                  <div><dt>Judul terbaca</dt><dd>{dossier.dossier.judul}</dd></div>
+                  <div>
+                    <dt>Rumusan masalah / kesimpulan</dt>
+                    <dd>
+                      {dossier.dossier.fakta_struktural.jumlah_rumusan_masalah} /{" "}
+                      {dossier.dossier.fakta_struktural.jumlah_kesimpulan}
+                      {dossier.dossier.fakta_struktural.rumusan_tanpa_kesimpulan.length > 0 &&
+                        ` — ${dossier.dossier.fakta_struktural.rumusan_tanpa_kesimpulan.length} rumusan belum terjawab`}
+                    </dd>
+                  </div>
+                  {dossier.dossier.metode.nama && (
+                    <div><dt>Metode</dt><dd>{dossier.dossier.metode.nama}</dd></div>
+                  )}
+                  {dossier.dossier.populasi_sampel.jumlah !== null && (
+                    <div><dt>Responden</dt><dd>{dossier.dossier.populasi_sampel.jumlah}</dd></div>
+                  )}
+                  {dossier.dossier.modul_kritik_terpicu.length > 0 && (
+                    <div>
+                      <dt>Modul kritik aktif</dt>
+                      <dd>{dossier.dossier.modul_kritik_terpicu.join(", ")}</dd>
+                    </div>
+                  )}
+                </dl>
+              </>
+            )}
+
+            {skripsi && (
+              <div className="row">
+                <button className="sm" disabled={rebuilding} onClick={onRebuildDossier}>
+                  {rebuilding ? "Membaca ulang…" : "Baca ulang skripsi"}
+                </button>
+                <span className="hint">
+                  Menjalankan ulang pembacaan naskah. Menimpa suntingan Anda.
+                </span>
+              </div>
+            )}
           </section>
 
           {/* ---------------- Suara penguji ---------------- */}
@@ -403,6 +547,12 @@ export function SettingsPage() {
               </div>
               {ttsProvider !== "browser" && <span className={ttsChip.cls}>{ttsChip.label}</span>}
             </div>
+
+            {settings?.effective_tts_shared && (
+              <p className="hint" style={{ marginTop: 0 }}>
+                Memakai suara dari host — key sendiri tidak dipakai selama tergabung.
+              </p>
+            )}
 
             <div className="field">
               <label>Provider Suara</label>
@@ -515,6 +665,12 @@ export function SettingsPage() {
               </div>
               {sttProvider !== "browser" && <span className={sttChip.cls}>{sttChip.label}</span>}
             </div>
+
+            {settings?.effective_stt_shared && (
+              <p className="hint" style={{ marginTop: 0 }}>
+                Memakai diktasi dari host — key sendiri tidak dipakai selama tergabung.
+              </p>
+            )}
 
             <div className="field">
               <label>Provider Diktasi</label>
@@ -679,6 +835,8 @@ export function SettingsPage() {
               </>
             )}
           </section>
+
+          <CollabSettings />
 
           {err && <p className="error">{err}</p>}
         </div>

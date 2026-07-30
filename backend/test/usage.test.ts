@@ -10,9 +10,9 @@ describe("per-user usage", () => {
     const db = openDb(":memory:");
     const u1 = createUser(db, "a", "h", "t");
     const u2 = createUser(db, "b", "h", "t");
-    recordUsage(db, u1, "t", "claude", "m", "turn", U);
-    recordUsage(db, u1, "t", "claude", "m", "turn", U);
-    recordUsage(db, u2, "t", "claude", "m", "turn", U);
+    recordUsage(db, u1, u1, "t", "claude", "m", "turn", U);
+    recordUsage(db, u1, u1, "t", "claude", "m", "turn", U);
+    recordUsage(db, u2, u2, "t", "claude", "m", "turn", U);
     expect(getUsageView(db, u1).total.calls).toBe(2);
     expect(getUsageView(db, u2).total.calls).toBe(1);
     resetUsage(db, u1);

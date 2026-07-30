@@ -6,12 +6,18 @@ import {
   replaceDocument,
   getActiveDocument,
   deleteDocument,
+  getDossierRow,
+  setDossierReady,
 } from "../repos/documents.js";
+import { chunkPages } from "../chunker.js";
+import { replaceChunks, countChunks } from "../repos/chunks.js";
+import { buildDossier, parseDossier, DOSSIER_VERSION, type Dossier } from "../dossier.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 export function skripsiRouter(
   db: Database.Database,
+  key: Buffer,
   now: () => string = () => new Date().toISOString(),
 ): Router {
   const r = Router();
@@ -21,18 +27,32 @@ export function skripsiRouter(
     if (!req.file) return res.status(400).json({ error: "File PDF wajib diunggah" });
     try {
       const pdf = await getDocumentProxy(new Uint8Array(req.file.buffer));
-      const { text } = await extractText(pdf, { mergePages: true });
-      const fullText = (Array.isArray(text) ? text.join("\n") : text).trim();
+      // mergePages:false — batas halaman harus bertahan sampai chunker, karena
+      // nomor halaman tidak bisa direkonstruksi setelah teks digabung.
+      const { text } = await extractText(pdf, { mergePages: false });
+      const pages = Array.isArray(text) ? text : [text];
+      const fullText = pages.join("\n\n").trim();
       if (!fullText) {
         return res
           .status(422)
           .json({ error: "Tidak ada teks yang bisa diekstrak dari PDF ini" });
       }
       const createdAt = now();
-      replaceDocument(db, userId, req.file.originalname, fullText, createdAt);
+      const documentId = replaceDocument(db, userId, req.file.originalname, fullText, createdAt);
+      const chunks = chunkPages(pages);
+      replaceChunks(db, documentId, chunks);
+
+      // Sengaja tidak di-await: membaca 145k token butuh puluhan detik, jauh
+      // melewati batas sabar sebuah request upload. Dipanggil SEBELUM respons
+      // supaya status 'pending' sudah tertulis ketika klien mulai memantau —
+      // buildDossier menulisnya sebelum await pertama.
+      void buildDossier(db, userId, key, documentId, fullText, now);
+
       res.json({
         filename: req.file.originalname,
         char_count: fullText.length,
+        chunk_count: chunks.length,
+        dossier_status: getDossierRow(db, documentId)?.dossier_status ?? null,
         uploaded_at: createdAt,
       });
     } catch {
@@ -44,11 +64,61 @@ export function skripsiRouter(
     const userId = req.userId!;
     const doc = getActiveDocument(db, userId);
     if (!doc) return res.json(null);
+    const d = getDossierRow(db, doc.id);
     res.json({
       filename: doc.filename,
       char_count: doc.char_count,
+      chunk_count: countChunks(db, doc.id),
+      dossier_status: d?.dossier_status ?? null,
+      dossier_error: d?.dossier_error ?? null,
       uploaded_at: doc.created_at,
     });
+  });
+
+  r.get("/dossier", (req, res) => {
+    const userId = req.userId!;
+    const doc = getActiveDocument(db, userId);
+    if (!doc) return res.json(null);
+    const d = getDossierRow(db, doc.id);
+    res.json({
+      status: d?.dossier_status ?? null,
+      error: d?.dossier_error ?? null,
+      model: d?.dossier_model ?? null,
+      dossier: d?.dossier ? (JSON.parse(d.dossier) as Dossier) : null,
+    });
+  });
+
+  /**
+   * Suntingan manual user. Divalidasi lewat parseDossier yang sama dengan
+   * keluaran model — dossier hasil suntingan tidak boleh bisa melanggar bentuk
+   * yang tidak akan diterima dari model.
+   */
+  r.put("/dossier", (req, res) => {
+    const userId = req.userId!;
+    const doc = getActiveDocument(db, userId);
+    if (!doc) return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
+    try {
+      const dossier = parseDossier(JSON.stringify(req.body ?? {}));
+      setDossierReady(db, doc.id, JSON.stringify(dossier), DOSSIER_VERSION, "manual");
+      res.json({ dossier });
+    } catch (e) {
+      res.status(400).json({
+        error:
+          (e as Error).message === "dossier missing judul/rumusan_masalah"
+            ? "Dossier wajib punya judul dan minimal satu rumusan masalah"
+            : "Dossier tidak valid",
+      });
+    }
+  });
+
+  // Jalan pemulihan ketika dossier gagal atau modelnya diganti. Tanpa ini,
+  // satu kegagalan pembangunan mengunci dokumen sampai user mengunggah ulang.
+  r.post("/dossier/rebuild", async (req, res) => {
+    const userId = req.userId!;
+    const doc = getActiveDocument(db, userId);
+    if (!doc) return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
+    void buildDossier(db, userId, key, doc.id, doc.full_text, now);
+    res.json({ dossier_status: getDossierRow(db, doc.id)?.dossier_status ?? null });
   });
 
   r.delete("/", (req, res) => {

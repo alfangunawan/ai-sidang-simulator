@@ -21,6 +21,26 @@ export interface SettingsView {
   has_openai_tts_key: boolean;
   stt_provider: string;
   has_openai_stt_key: boolean;
+  effective_ai_shared?: boolean;
+  effective_tts_shared?: boolean;
+  effective_stt_shared?: boolean;
+  effective_tts_provider?: string;
+  effective_tts_voice?: string;
+  effective_stt_provider?: string;
+}
+export interface CollabMember { member_user_id: number; username: string; joined_at: string; }
+export interface CollabShares { share_ai: number; share_tts: number; share_stt: number; }
+export interface CollabState {
+  hosting: {
+    invite_code: string;
+    shares: CollabShares;
+    members: CollabMember[];
+    usage: {
+      total: { calls: number; cost_usd?: number };
+      by_member: { member_user_id: number; username: string; totals: { calls: number; cost_usd?: number } }[];
+    };
+  } | null;
+  joined: { host_username: string; shares: CollabShares } | null;
 }
 export interface UsageTotals {
   input_tokens: number;
@@ -48,10 +68,43 @@ export interface TestResult {
   ok: boolean;
   error?: string;
 }
+export type DossierStatus = "pending" | "ready" | "failed";
 export interface SkripsiInfo {
   filename: string;
   char_count: number;
   uploaded_at: string;
+  chunk_count?: number;
+  dossier_status?: DossierStatus | null;
+  dossier_error?: string | null;
+}
+export interface Dossier {
+  judul: string;
+  rumusan_masalah: string[];
+  tujuan: string[];
+  batasan: string[];
+  metode: { nama: string; justifikasi: string };
+  instrumen: string[];
+  populasi_sampel: { deskripsi: string; jumlah: number | null };
+  hasil_kunci: { klaim: string; angka: string; sumber: string }[];
+  kesimpulan: string[];
+  keterbatasan: string[];
+  peta_bab: { judul: string; halaman_mulai: number | null }[];
+  fakta_struktural: {
+    jumlah_rumusan_masalah: number;
+    jumlah_kesimpulan: number;
+    rumusan_tanpa_kesimpulan: string[];
+    sitasi_bab2_tidak_di_daftar_pustaka: string[];
+    jumlah_tabel: number;
+    jumlah_gambar: number;
+  };
+  modul_kritik_terpicu: string[];
+  poin_serangan: string[];
+}
+export interface DossierView {
+  status: DossierStatus | null;
+  error: string | null;
+  model: string | null;
+  dossier: Dossier | null;
 }
 export interface SessionSummary {
   id: string;

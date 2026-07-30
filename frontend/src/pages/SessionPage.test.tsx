@@ -3,6 +3,34 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SessionPage } from "./SessionPage.js";
 import * as api from "../api.js";
 
+const settingsView = {
+  provider: "claude",
+  model: "claude-sonnet-5",
+  has_api_key: true,
+  attack_points: "",
+  examiner_mode: "standar",
+  examiner_modes: [
+    { value: "santai", label: "Santai" },
+    { value: "standar", label: "Standar" },
+    { value: "kritis", label: "Kritis" },
+    { value: "galak", label: "Galak" },
+  ],
+  examiner_type: "umum",
+  examiner_types: [
+    { value: "umum", label: "Umum (gabungan)" },
+    { value: "metodolog", label: "Metodolog" },
+    { value: "domain", label: "Ahli Domain" },
+    { value: "teknis", label: "Teknis (RPL/SI)" },
+    { value: "ketua", label: "Ketua Sidang" },
+  ],
+  tts_provider: "browser",
+  tts_voice: "",
+  has_google_tts_key: false,
+  has_openai_tts_key: false,
+  stt_provider: "browser",
+  has_openai_stt_key: false,
+};
+
 beforeEach(() => {
   localStorage.clear();
   // jsdom has no canvas backend; stub getContext (VoiceVisualizer guards on null)
@@ -14,33 +42,6 @@ beforeEach(() => {
   (window as any).speechSynthesis = { speak: vi.fn(), cancel: vi.fn() };
   // jsdom has no SpeechSynthesisUtterance constructor; stub it so tts.speak() doesn't throw.
   (window as any).SpeechSynthesisUtterance = vi.fn().mockImplementation((text: string) => ({ text }));
-  const settingsView = {
-    provider: "claude",
-    model: "claude-sonnet-5",
-    has_api_key: true,
-    attack_points: "",
-    examiner_mode: "standar",
-    examiner_modes: [
-      { value: "santai", label: "Santai" },
-      { value: "standar", label: "Standar" },
-      { value: "kritis", label: "Kritis" },
-      { value: "galak", label: "Galak" },
-    ],
-    examiner_type: "umum",
-    examiner_types: [
-      { value: "umum", label: "Umum (gabungan)" },
-      { value: "metodolog", label: "Metodolog" },
-      { value: "domain", label: "Ahli Domain" },
-      { value: "teknis", label: "Teknis (RPL/SI)" },
-      { value: "ketua", label: "Ketua Sidang" },
-    ],
-    tts_provider: "browser",
-    tts_voice: "",
-    has_google_tts_key: false,
-    has_openai_tts_key: false,
-    stt_provider: "browser",
-    has_openai_stt_key: false,
-  };
   vi.spyOn(api, "createSession").mockResolvedValue("sess-1");
   vi.spyOn(api, "getTurns").mockResolvedValue([]);
   vi.spyOn(api, "postTurn").mockResolvedValue({
@@ -54,7 +55,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("SessionPage", () => {
   it("sends a manual answer and renders the examiner reply", async () => {
-    render(<SessionPage onClosed={vi.fn()} />);
+    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     const textarea = screen.getByPlaceholderText(/Ketik jawaban/);
@@ -67,45 +68,37 @@ describe("SessionPage", () => {
     expect(api.postTurn).toHaveBeenCalledWith("sess-1", "Jawaban saya.");
   });
 
-  it("Sesi Baru starts a fresh session without deleting the old one", async () => {
+  it("Sesi Baru hands back to the picker without starting or deleting a session", async () => {
     const del = vi.spyOn(api, "deleteSession");
-    render(<SessionPage onClosed={vi.fn()} />);
+    const onNewSession = vi.fn();
+    render(<SessionPage onClosed={vi.fn()} onNewSession={onNewSession} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     fireEvent.click(screen.getByText("Sesi Baru"));
 
-    await waitFor(() => expect(api.createSession).toHaveBeenCalledTimes(2));
+    expect(onNewSession).toHaveBeenCalled();
+    expect(api.createSession).toHaveBeenCalledTimes(1); // only the mount's own
     expect(del).not.toHaveBeenCalled();
   });
 
-  it("renders the examiner-mode selector and persists a change", async () => {
-    render(<SessionPage onClosed={vi.fn()} />);
-    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+  it("names the persona behind the saved mode/type pair", async () => {
+    vi.spyOn(api, "getSettings").mockResolvedValue({
+      ...settingsView,
+      examiner_mode: "kritis",
+      examiner_type: "teknis",
+    });
+    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
 
-    const select = (await screen.findByText("Galak")).closest(
-      "select",
-    ) as HTMLSelectElement;
-    expect(select).toBeTruthy();
-    fireEvent.change(select, { target: { value: "galak" } });
-
-    await waitFor(() =>
-      expect(api.saveSettings).toHaveBeenCalledWith({ examiner_mode: "galak" }),
-    );
+    expect(await screen.findByText("Dr. Anindya Kusuma, S.T., M.T.")).toBeTruthy();
+    expect(screen.getByText("Penguji teknis · mode Kritis")).toBeTruthy();
+    // the examiner is locked for the sitting — no picker in the session view
+    expect(screen.queryByText("Mode penguji")).toBeNull();
   });
 
-  it("renders the examiner-type selector and persists a change", async () => {
-    render(<SessionPage onClosed={vi.fn()} />);
-    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
-
-    const select = (await screen.findByText("Metodolog")).closest(
-      "select",
-    ) as HTMLSelectElement;
-    expect(select).toBeTruthy();
-    fireEvent.change(select, { target: { value: "metodolog" } });
-
-    await waitFor(() =>
-      expect(api.saveSettings).toHaveBeenCalledWith({ examiner_type: "metodolog" }),
-    );
+  it("falls back to a plain examiner when the saved pair matches no persona", async () => {
+    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    // fixture is standar/umum, which no named persona covers
+    expect(await screen.findByText("Penguji")).toBeTruthy();
   });
 
   it("offers closing as a banner, never a modal that covers the examiner's last reply", async () => {
@@ -113,7 +106,7 @@ describe("SessionPage", () => {
       reply: "Rekap kelemahan utama: metodologi.",
       propose_close: true,
     });
-    render(<SessionPage onClosed={vi.fn()} />);
+    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), {
@@ -132,7 +125,7 @@ describe("SessionPage", () => {
   it("declining an AI proposal calls continueSession and drops the banner", async () => {
     vi.spyOn(api, "postTurn").mockResolvedValue({ reply: "Baik.", propose_close: true });
     const cont = vi.spyOn(api, "continueSession").mockResolvedValue();
-    render(<SessionPage onClosed={vi.fn()} />);
+    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
     fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), { target: { value: "x" } });
     fireEvent.click(screen.getByText("Kirim"));
@@ -143,11 +136,27 @@ describe("SessionPage", () => {
     expect(screen.queryByText("Lanjut bertanya")).toBeNull();
   });
 
+  it("surfaces a send failure as a banner above the page heading", async () => {
+    vi.spyOn(api, "postTurn").mockRejectedValue(new Error("Upload skripsi (PDF) dulu"));
+    const { container } = render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), { target: { value: "x" } });
+    fireEvent.click(screen.getByText("Kirim"));
+
+    const banner = await screen.findByRole("alert");
+    expect(banner.textContent).toContain("Upload skripsi (PDF) dulu");
+    // above the fold: the banner precedes the page heading in document order
+    const heading = screen.getByText("Latihan Sidang");
+    expect(banner.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector(".alert.danger")).toBeTruthy();
+  });
+
   it("Akhiri Sidang → confirm closes and calls onClosed with the assessment", async () => {
     const assessment = { final_score: 80 } as any;
     vi.spyOn(api, "closeSession").mockResolvedValue(assessment);
     const onClosed = vi.fn();
-    render(<SessionPage onClosed={onClosed} />);
+    render(<SessionPage onClosed={onClosed} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     // "Akhiri Sidang" is disabled until there's at least one turn — same guard as "Export".
