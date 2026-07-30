@@ -24,27 +24,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export const SESSION_KEY = "sibiru_session_id";
-// When the practice clock started, kept per session so a refresh resumes the
-// same count instead of restarting it — and so it stays at 0:00 until the
-// student actually begins.
-const START_KEY = "sibiru_session_started_at";
+// Detik yang SUDAH berjalan di sesi ini, bukan jam mulainya. Menyimpan jam
+// mulai membuat jam terus menghitung selagi mahasiswa keluar atau me-refresh —
+// waktu di luar halaman ikut masuk ke durasi sidang. Yang dicatat karena itu
+// hitungannya sendiri, disimpan tiap detik, dan dilanjutkan saat halaman
+// kembali dibuka. Tidak ada isinya = mahasiswa belum mulai, jam tetap 0:00.
+const ELAPSED_KEY = "sibiru_session_elapsed";
 
 /** Forget the current sitting so the next mount opens a brand-new session. */
 export function clearStoredSession(): void {
   localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(START_KEY);
+  localStorage.removeItem(ELAPSED_KEY);
 }
 
 export function hasStoredSession(): boolean {
   return localStorage.getItem(SESSION_KEY) !== null;
 }
 
-function loadStart(id: string): number | null {
+/** Detik yang sudah berjalan pada sesi `id`; null bila sidang belum dimulai. */
+function loadElapsed(id: string): number | null {
   try {
-    const raw = localStorage.getItem(START_KEY);
+    const raw = localStorage.getItem(ELAPSED_KEY);
     if (!raw) return null;
-    const saved = JSON.parse(raw) as { id?: string; at?: number };
-    return saved?.id === id && typeof saved.at === "number" ? saved.at : null;
+    const saved = JSON.parse(raw) as { id?: string; secs?: number };
+    return saved?.id === id && typeof saved.secs === "number" ? saved.secs : null;
   } catch {
     return null;
   }
@@ -83,7 +86,7 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
   // as a modal — a modal would cover the closing reply the student needs to read.
   const [proposeClose, setProposeClose] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [recSecs, setRecSecs] = useState(0);
   const stt = useSpeechRecognition(sttProvider);
@@ -104,16 +107,19 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
         localStorage.setItem(SESSION_KEY, id);
       }
       setSessionId(id);
-      setStartedAt(loadStart(id));
+      const secs = loadElapsed(id);
+      setRunning(secs !== null);
+      setElapsed(secs ?? 0);
       try {
         setTurns(await getTurns(id));
       } catch {
         // stale id (backend db reset): make a fresh one
         const fresh = await createSession();
         localStorage.setItem(SESSION_KEY, fresh);
-        localStorage.removeItem(START_KEY);
+        localStorage.removeItem(ELAPSED_KEY);
         setSessionId(fresh);
-        setStartedAt(null);
+        setRunning(false);
+        setElapsed(0);
         setTurns([]);
       }
     })();
@@ -136,19 +142,21 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
     if (el) el.scrollTop = el.scrollHeight; // scroll the panel, not the page
   }, [turns, busy]);
 
-  // The clock only runs once the student starts (first recording or first
-  // answer sent) and is measured against a stored timestamp, so a page refresh
-  // resumes the same count.
+  // Jam baru jalan setelah mahasiswa mulai (rekaman atau jawaban pertama), dan
+  // hanya selama halaman sidang terbuka: hitungannya disimpan tiap detik,
+  // sehingga refresh melanjutkan angka yang sama — bukan menambahi waktu yang
+  // dihabiskan di luar halaman.
   useEffect(() => {
-    if (startedAt === null) {
-      setElapsed(0);
-      return;
-    }
-    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
-    tick();
-    const t = setInterval(tick, 1000);
+    if (!running || !sessionId) return;
+    const t = setInterval(() => {
+      setElapsed((s) => {
+        const next = s + 1;
+        localStorage.setItem(ELAPSED_KEY, JSON.stringify({ id: sessionId, secs: next }));
+        return next;
+      });
+    }, 1000);
     return () => clearInterval(t);
-  }, [startedAt]);
+  }, [running, sessionId]);
 
   // The composer counts the current recording only — the whole-sitting clock
   // lives in the side panel, so the two never show the same number.
@@ -177,10 +185,9 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
   }, [manual]);
 
   function markStarted() {
-    if (startedAt !== null || !sessionId) return;
-    const at = Date.now();
-    localStorage.setItem(START_KEY, JSON.stringify({ id: sessionId, at }));
-    setStartedAt(at);
+    if (running || !sessionId) return;
+    localStorage.setItem(ELAPSED_KEY, JSON.stringify({ id: sessionId, secs: 0 }));
+    setRunning(true);
   }
 
   const pending = manual;
@@ -471,9 +478,12 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
                       />
                     ))}
                   </div>
+                  {/* Setinggi tombol Rekam dan rata tengah di dalamnya: sebagai
+                      teks inline di baris `items-end`, angkanya duduk di dasar
+                      baris — sejajar textarea, melenceng dari tombol di sebelahnya. */}
                   <span
                     className={cn(
-                      "hidden font-mono text-xs tabular-nums sm:inline",
+                      "hidden h-8 items-center font-mono text-xs tabular-nums sm:flex",
                       stt.listening ? "text-destructive" : "text-muted-foreground",
                     )}
                   >

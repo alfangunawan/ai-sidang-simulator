@@ -40,7 +40,12 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("beranda");
   // Under Beranda the session replaces the dashboard, the way the sidang
   // replaces the waiting room — the tab stays lit either way.
-  const [inSession, setInSession] = useState(false);
+  //
+  // Dibuka dari localStorage, bukan `false`: refresh di tengah sidang dulu
+  // melempar mahasiswa ke dashboard padahal sesinya masih hidup di server.
+  // Sesi yang sudah ditutup selalu menghapus kuncinya, jadi ini hanya menyala
+  // untuk sidang yang benar-benar belum selesai.
+  const [inSession, setInSession] = useState(hasStoredSession);
   const [result, setResult] = useState<Assessment | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);

@@ -69,6 +69,29 @@ describe("SessionPage", () => {
     expect(api.postTurn).toHaveBeenCalledWith("sess-1", "Jawaban saya.");
   });
 
+  // Jam sidang mencatat detik yang sudah berjalan, bukan jam mulainya: waktu di
+  // luar halaman (mahasiswa refresh atau kembali ke Beranda) tidak boleh ikut
+  // terhitung, dan hitungannya harus dilanjutkan, bukan diulang dari nol.
+  it("resumes the clock from the stored count, ignoring time spent away", async () => {
+    localStorage.setItem("sibiru_session_id", "sess-1");
+    localStorage.setItem(
+      "sibiru_session_elapsed",
+      JSON.stringify({ id: "sess-1", secs: 125 }),
+    );
+    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+
+    expect(await screen.findByText("2:05")).toBeTruthy();
+    expect(api.createSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps the clock at 0:00 until the student actually starts", async () => {
+    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
+
+    expect(screen.getByText("0:00")).toBeTruthy();
+    expect(localStorage.getItem("sibiru_session_elapsed")).toBeNull();
+  });
+
   it("Sesi Baru hands back to the picker without starting or deleting a session", async () => {
     const del = vi.spyOn(api, "deleteSession");
     const onNewSession = vi.fn();

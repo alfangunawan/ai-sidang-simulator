@@ -87,11 +87,17 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
 
   return (
     <Dialog open onOpenChange={(next) => !next && onStep(0)}>
+      {/* `flex flex-col`, bukan grid bawaan DialogContent: dengan grid, baris isi
+          tidak selalu mengalah pada `max-h` (Safari/iOS tidak menyusutkannya),
+          jadi enam kartu penguji mendorong baris tombol ke luar kotak — dan
+          `overflow-hidden` memotongnya. Lanjut dan Batal hilang sama sekali.
+          Kolom flex + `min-h-0` di badan yang menggulir memberi hasil yang sama
+          di semua browser: hanya badan yang menyusut, header dan tombol tetap. */}
       <DialogContent
         showCloseButton={false}
-        className="max-h-[92dvh] gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
       >
-        <div className="flex items-start gap-4 border-b px-6 py-5">
+        <div className="flex shrink-0 items-start gap-4 border-b px-6 py-5">
           <div className="flex-1">
             <span className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
               {micOnly ? "Kesiapan" : `Langkah ${step} dari 2`}
@@ -121,7 +127,7 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
           </Button>
         </div>
 
-        <div className="overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {step === 1 ? (
             <>
               <p className="mb-4 text-sm text-muted-foreground">
@@ -280,7 +286,7 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
           )}
         </div>
 
-        <div className="flex items-center gap-3 border-t bg-muted/30 px-6 py-4">
+        <div className="flex shrink-0 items-center gap-3 border-t bg-muted/30 px-6 py-4">
           <span className="flex-1 truncate text-xs text-muted-foreground">
             {micOnly
               ? "Tes ini tidak memulai sidang."
