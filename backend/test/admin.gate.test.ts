@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { openDb } from "../src/db.js";
 import { buildApp } from "../src/app.js";
 import { setAdmin, isAdmin, countAdmins, getUserByUsername } from "../src/repos/users.js";
+import { grantAdmin } from "../scripts/grant-admin.js";
 
 function ctx() {
   const db = openDb(":memory:");
@@ -53,5 +54,20 @@ describe("/auth/me exposes is_admin", () => {
     setAdmin(db, u.id, 1);
     me = await u.agent.get("/auth/me").expect(200);
     expect(me.body.user).toMatchObject({ id: u.id, username: "alfan", is_admin: true });
+  });
+});
+
+describe("grant-admin script", () => {
+  it("promotes an existing user and reports an unknown one", async () => {
+    const { db, app } = ctx();
+    const u = await reg(app, "alfan");
+
+    expect(grantAdmin(db, "nobody")).toEqual({ ok: false, reason: "not_found" });
+    expect(grantAdmin(db, "alfan")).toEqual({ ok: true, id: u.id });
+    expect(isAdmin(db, u.id)).toBe(true);
+
+    // Idempoten: menjalankannya dua kali tidak menggandakan apa pun.
+    expect(grantAdmin(db, "alfan")).toEqual({ ok: true, id: u.id });
+    expect(countAdmins(db)).toBe(1);
   });
 });
