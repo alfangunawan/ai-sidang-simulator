@@ -93,7 +93,11 @@ export function VoiceVisualizer({ state, getLevel, size = 200 }: Props) {
         height={size}
         aria-label={`Visualisasi suara: ${state}`}
         role="img"
-        style={{ maxWidth: "100%" }}
+        // `margin: 0 auto`, bukan `textAlign` induknya: reset Tailwind membuat
+        // canvas `display: block`, jadi perataan teks tidak menyentuhnya sama
+        // sekali dan orb-nya menempel ke kiri kartu. `height: auto` menjaga
+        // lingkarannya tetap bulat saat lebar kartu di bawah `size`.
+        style={{ maxWidth: "100%", height: "auto", margin: "0 auto" }}
       />
       {LABELS[state] && (
         <div style={{ color: COLORS[state], fontSize: ".85rem" }}>

@@ -121,12 +121,13 @@ export function heatLabel(p: Persona): string {
 }
 
 /**
- * The persona behind a saved mode/type pair. Settings changed outside the
- * picker (or seeded before personas existed) can land on a combination no
- * persona covers — those get a plain examiner rather than a wrong name.
+ * Persona di balik pasangan mode/type tersimpan. Daftarnya dioper dari App
+ * (hasil fetch, dengan PERSONAS sebagai nilai awal) supaya persona yang diedit
+ * admin langsung terpakai tanpa deploy — dan pasangan yang tidak tercakup
+ * tetap dapat penguji polos, bukan nama yang salah.
  */
-export function personaFor(mode: string, type: string): Persona {
-  const hit = PERSONAS.find((p) => p.mode === mode && p.type === type);
+export function personaFor(list: Persona[], mode: string, type: string): Persona {
+  const hit = list.find((p) => p.mode === mode && p.type === type);
   if (hit) return hit;
   return {
     key: `${mode}-${type}`,

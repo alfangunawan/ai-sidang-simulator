@@ -6,7 +6,7 @@ import {
 } from "../auth.js";
 import {
   createUser, getUserByUsername, getUserById,
-  createToken, getUserIdByToken, deleteToken,
+  createToken, getUserIdByToken, deleteToken, isAdmin, isSuspended,
 } from "../repos/users.js";
 import { seedDefaults } from "../repos/settings.js";
 
@@ -20,7 +20,22 @@ export function requireAuth(
     const token = readAuthCookie(req);
     const userId = token ? getUserIdByToken(db, token, now()) : null;
     if (!userId) return res.status(401).json({ error: "Silakan login" });
+    // Satu penjaga di sini menutup /sessions, /skripsi, /tts, /stt, /settings,
+    // /collab dan apa pun yang ditambahkan nanti — jangan disalin per route.
+    if (isSuspended(db, userId)) return res.status(403).json({ error: "Akun ditangguhkan" });
     req.userId = userId;
+    next();
+  };
+}
+
+/**
+ * Pasang SESUDAH requireAuth. Gerbangnya membaca kolom `users.is_admin` lewat
+ * `req.userId` — terikat ke id, bukan username, supaya ganti username tidak
+ * diam-diam mencabut atau memindahkan hak admin.
+ */
+export function requireAdmin(db: Database.Database): RequestHandler {
+  return (req, res, next) => {
+    if (!isAdmin(db, req.userId!)) return res.status(403).json({ error: "Khusus admin" });
     next();
   };
 }
@@ -53,7 +68,7 @@ export function authRouter(
     const userId = createUser(db, username, hashPassword(password), now());
     seedDefaults(db, userId);
     issue(res, req, userId);
-    res.json({ user: { id: userId, username } });
+    res.json({ user: getUserById(db, userId) });
   });
 
   r.post("/login", (req, res) => {
@@ -63,8 +78,11 @@ export function authRouter(
     if (!user || !verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ error: "Username atau password salah" });
     }
+    if (isSuspended(db, user.id)) {
+      return res.status(403).json({ error: "Akun ditangguhkan" });
+    }
     issue(res, req, user.id);
-    res.json({ user: { id: user.id, username: user.username } });
+    res.json({ user: getUserById(db, user.id) });
   });
 
   r.post("/logout", (req, res) => {
@@ -74,10 +92,8 @@ export function authRouter(
     res.json({ ok: true });
   });
 
-  r.get("/me", (req, res) => {
-    const token = readAuthCookie(req);
-    const userId = token ? getUserIdByToken(db, token, now()) : null;
-    const user = userId ? getUserById(db, userId) : null;
+  r.get("/me", requireAuth(db, now), (req, res) => {
+    const user = getUserById(db, req.userId!);
     if (!user) return res.status(401).json({ error: "Belum login" });
     res.json({ user });
   });

@@ -1,10 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Search } from "lucide-react";
 import { listSessions, getTurns, deleteSession } from "../api.js";
 import type { SessionSummary, Turn } from "../types.js";
 import { Transcript } from "../components/Transcript.js";
 import { ConfirmModal } from "../components/ConfirmModal.js";
 import { turnsToCsv, downloadCsv } from "../lib/csv.js";
-import { formatDate, scoreTone } from "../lib/sessions.js";
+import { formatDate } from "../lib/sessions.js";
+import { scoreChipClass } from "./HomePage.js";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 function exportSession(s: SessionSummary, turns: Turn[]): void {
   const slug = s.created_at.slice(0, 16).replace(/[:T]/g, "-");
@@ -22,6 +35,28 @@ function bucketOf(iso: string): string {
 }
 
 const BUCKETS = ["Hari ini", "Minggu ini", "Lebih lama"];
+
+const FILTERS = [
+  { value: "all", label: "Semua sesi" },
+  { value: "scored", label: "Sudah dinilai" },
+  { value: "unscored", label: "Belum dinilai" },
+];
+
+function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <Card>
+      <CardContent>
+        <div className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+          {label}
+        </div>
+        <div className="mt-1 flex items-baseline gap-1.5">
+          <span className="font-serif text-2xl font-semibold">{value}</span>
+          {sub && <small className="text-xs text-muted-foreground">{sub}</small>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 interface Props {
   onOpenResult: (id: string) => void;
@@ -104,182 +139,204 @@ export function HistoryPage({ onOpenResult, openId, onOpened }: Props) {
     }
   }
 
+  const confirm = (
+    <ConfirmModal
+      open={confirmId !== null}
+      title="Hapus sesi?"
+      message="Seluruh percakapan sesi ini akan dihapus permanen."
+      onConfirm={doDelete}
+      onCancel={() => setConfirmId(null)}
+    />
+  );
+
   if (selected) {
     return (
       <div>
-        <button className="sm" onClick={() => setSelected(null)} style={{ marginBottom: 18 }}>
-          ← Semua sesi
-        </button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2"
+          onClick={() => setSelected(null)}
+        >
+          <ArrowLeft />
+          Semua sesi
+        </Button>
 
-        <div className="page-head">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2>{selected.label ?? "Sesi latihan"}</h2>
-            <p className="page-sub">
+            <h2 className="font-serif text-2xl font-semibold tracking-tight">
+              {selected.label ?? "Sesi latihan"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               {formatDate(selected.created_at)} · {selected.turn_count} percakapan
               {selected.final_score != null && ` · Skor ${selected.final_score}`}
             </p>
           </div>
-          <div className="head-tools">
-            <button onClick={() => exportSession(selected, detailTurns)}>Export CSV</button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => exportSession(selected, detailTurns)}>
+              Export CSV
+            </Button>
             {selected.status === "closed" && (
-              <button className="primary" onClick={() => onOpenResult(selected.id)}>
-                Lihat hasil sidang
-              </button>
+              <Button onClick={() => onOpenResult(selected.id)}>Lihat hasil sidang</Button>
             )}
-            <button className="danger" onClick={() => setConfirmId(selected.id)}>
+            <Button variant="outline" className="text-destructive hover:text-destructive"
+              onClick={() => setConfirmId(selected.id)}>
               Hapus
-            </button>
+            </Button>
           </div>
         </div>
 
-        <section className="card card-flush">
-          <header className="convo-head">
-            <div className="avatar-wrap">
-              <div className="avatar" aria-hidden="true">P</div>
+        <Card className="overflow-hidden py-0">
+          <CardHeader className="flex flex-row items-center gap-3 border-b bg-muted/40 py-4">
+            <div className="flex size-9 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
+              P
             </div>
-            <div className="convo-who">
-              <span className="convo-name">Transkrip Sidang</span>
-              <span className="convo-role">Hanya baca</span>
+            <div>
+              <div className="text-sm font-semibold">Transkrip Sidang</div>
+              <div className="text-xs text-muted-foreground">Hanya baca</div>
             </div>
-          </header>
-          <div className="transcript-body readonly">
+          </CardHeader>
+          <CardContent className="max-h-[60vh] space-y-4 overflow-y-auto py-5">
             {detailTurns.length === 0 ? (
-              <div className="empty">
-                <p>Tidak ada percakapan pada sesi ini.</p>
-              </div>
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Tidak ada percakapan pada sesi ini.
+              </p>
             ) : (
               <Transcript turns={detailTurns} />
             )}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        {err && <p className="error">{err}</p>}
-        <ConfirmModal
-          open={confirmId !== null}
-          title="Hapus sesi?"
-          message="Seluruh percakapan sesi ini akan dihapus permanen."
-          onConfirm={doDelete}
-          onCancel={() => setConfirmId(null)}
-        />
+        {err && <p className="mt-4 text-sm text-destructive">{err}</p>}
+        {confirm}
       </div>
     );
   }
 
   return (
     <div>
-      <div className="page-head">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2>Riwayat Sidang</h2>
-          <p className="page-sub">
-            {sessions.length} sesi tersimpan. Buka transkrip untuk membaca ulang,
-            atau lihat hasil penilaian penguji.
+          <h2 className="font-serif text-2xl font-semibold tracking-tight">Riwayat Sidang</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {sessions.length} sesi tersimpan. Buka transkrip untuk membaca ulang, atau
+            lihat hasil penilaian penguji.
           </p>
         </div>
-        <div className="head-tools">
-          <div className="search">
-            <span aria-hidden="true">⌕</span>
-            <input
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
               value={query}
               placeholder="Cari sesi…"
               aria-label="Cari sesi"
+              className="w-48 pl-8"
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <select
-            value={filter}
-            aria-label="Saring sesi"
-            style={{ margin: 0, width: "auto" }}
-            onChange={(e) => setFilter(e.target.value as typeof filter)}
-          >
-            <option value="all">Semua sesi</option>
-            <option value="scored">Sudah dinilai</option>
-            <option value="unscored">Belum dinilai</option>
-          </select>
+          <Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
+            <SelectTrigger aria-label="Saring sesi" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FILTERS.map((f) => (
+                <SelectItem key={f.value} value={f.value}>
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {sessions.length === 0 ? (
-        <p className="empty-sub">Belum ada riwayat sesi.</p>
+        <p className="text-sm text-muted-foreground">Belum ada riwayat sesi.</p>
       ) : (
         <>
-          <div className="stat-row">
-            <div className="stat-card">
-              <div className="eyebrow">Total sesi</div>
-              <div className="stat-value">{stats.total}</div>
-            </div>
-            <div className="stat-card">
-              <div className="eyebrow">Rata-rata skor</div>
-              <div className="stat-value">
-                {stats.avg ?? "—"}
-                {stats.avg != null && <small>/100</small>}
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="eyebrow">Sesi dinilai</div>
-              <div className="stat-value">
-                {stats.scored}
-                <small>dari {stats.total}</small>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="eyebrow">Total percakapan</div>
-              <div className="stat-value">{stats.turns}</div>
-            </div>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat label="Total sesi" value={stats.total} />
+            <Stat label="Rata-rata skor" value={stats.avg ?? "—"} sub={stats.avg != null ? "/100" : undefined} />
+            <Stat label="Sesi dinilai" value={stats.scored} sub={`dari ${stats.total}`} />
+            <Stat label="Total percakapan" value={stats.turns} />
           </div>
 
           {groups.length === 0 ? (
-            <p className="empty-sub">Tidak ada sesi yang cocok dengan filter.</p>
+            <p className="text-sm text-muted-foreground">
+              Tidak ada sesi yang cocok dengan filter.
+            </p>
           ) : (
             groups.map((g) => (
-              <div className="group" key={g.label}>
-                <div className="group-head">
-                  <span className="eyebrow">{g.label}</span>
-                  <span className="count">{g.items.length} sesi</span>
-                  <i />
+              <section className="mb-6" key={g.label}>
+                <div className="mb-2 flex items-center gap-3">
+                  <span className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+                    {g.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{g.items.length} sesi</span>
+                  <i className="h-px flex-1 bg-border" />
                 </div>
-                <ul className="history-list">
-                  {g.items.map((s) => (
-                    <li key={s.id} className="history-row">
-                      <div className={`score-badge ${scoreTone(s.final_score)}`}>
-                        {s.final_score ?? "—"}
-                      </div>
-                      <div className="history-meta">
-                        <span className="history-title">{s.label ?? "Sesi latihan"}</span>
-                        <span className="history-count">
-                          {formatDate(s.created_at)} · {s.turn_count} percakapan
-                          {s.final_score != null && ` · Skor ${s.final_score}`}
-                        </span>
-                      </div>
-                      <div className="history-actions">
-                        <button className="sm" onClick={() => open(s)}>
-                          Buka
-                        </button>
-                        {s.status === "closed" && (
-                          <button className="sm primary" onClick={() => onOpenResult(s.id)}>
-                            Lihat Hasil
-                          </button>
-                        )}
-                        <button className="sm quiet-danger" onClick={() => setConfirmId(s.id)}>
-                          Hapus
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                <Card>
+                  <CardContent>
+                    <ul className="divide-y">
+                      {g.items.map((s) => (
+                        <li
+                          key={s.id}
+                          className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+                        >
+                          <div
+                            className={cn(
+                              "flex size-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
+                              scoreChipClass(s.final_score),
+                            )}
+                          >
+                            {s.final_score ?? "—"}
+                          </div>
+                          {/* A floor rather than min-w-0: with three action
+                              buttons on the line, a shrink-to-nothing column
+                              crushes the label to one letter instead of
+                              wrapping the buttons onto their own row. */}
+                          <div className="min-w-40 flex-1">
+                            <div className="truncate text-sm font-semibold">
+                              {s.label ?? "Sesi latihan"}
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {formatDate(s.created_at)} · {s.turn_count} percakapan
+                              {s.final_score != null && ` · Skor ${s.final_score}`}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => open(s)}>
+                              Buka
+                            </Button>
+                            {s.status === "closed" && (
+                              <Button size="sm" onClick={() => onOpenResult(s.id)}>
+                                Lihat Hasil
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground hover:text-destructive"
+                              onClick={() => setConfirmId(s.id)}
+                            >
+                              Hapus
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </section>
             ))
           )}
         </>
       )}
 
-      {err && <p className="error">{err}</p>}
-      <ConfirmModal
-        open={confirmId !== null}
-        title="Hapus sesi?"
-        message="Seluruh percakapan sesi ini akan dihapus permanen."
-        onConfirm={doDelete}
-        onCancel={() => setConfirmId(null)}
-      />
+      {err && <p className="mt-4 text-sm text-destructive">{err}</p>}
+      {confirm}
     </div>
   );
 }

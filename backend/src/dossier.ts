@@ -195,11 +195,11 @@ export async function buildDossier(
     const provider = getProvider(cfg);
     const keyOwner = resolveSourceUser(db, userId, "ai");
 
-    const attempt = async (): Promise<Dossier> => {
+    const attempt = async (maxTokens: number): Promise<Dossier> => {
       const out = await provider.generate(
         buildDossierSystem(),
         buildDossierUser(fullText),
-        DOSSIER_MAX_TOKENS,
+        maxTokens,
       );
       recordUsage(db, userId, keyOwner, now(), cfg.provider, cfg.model, "dossier", out.usage);
       if (out.truncated) throw new Error(TRUNCATED);
@@ -208,13 +208,22 @@ export async function buildDossier(
 
     let dossier: Dossier;
     try {
-      dossier = await attempt();
+      dossier = await attempt(DOSSIER_MAX_TOKENS);
     } catch (e) {
-      // Sama dengan jalur assessment: jawaban terpotong itu deterministik —
-      // percobaan kedua dibayar penuh dan gagal identik. Hanya JSON rusak yang
-      // pantas diulang.
-      if ((e as Error).message === TRUNCATED) throw e;
-      dossier = await attempt();
+      const truncated = (e as Error).message === TRUNCATED;
+      // JSON rusak: acak, jadi percobaan kedua dengan plafon sama masuk akal.
+      // Terpotong: BUKAN acak — mengulang dengan plafon yang sama dibayar penuh
+      // dan gagal identik. Yang kurang plafonnya (naskah 350rb karakter, model
+      // reasoning menghabiskan jatah output sebelum JSON tertutup), jadi ulangan
+      // hanya berguna bila plafonnya dinaikkan.
+      try {
+        dossier = await attempt(truncated ? DOSSIER_MAX_TOKENS * 2 : DOSSIER_MAX_TOKENS);
+      } catch (e2) {
+        // Sebagian model menolak plafon di atas batas outputnya. Kegagalan
+        // aslinya yang dilaporkan — "model kehabisan token" bisa ditindaklanjuti
+        // user, "permintaan ditolak" karena plafon internal tidak.
+        throw truncated ? e : e2;
+      }
     }
 
     setDossierReady(db, documentId, JSON.stringify(dossier), DOSSIER_VERSION, cfg.model);
@@ -226,7 +235,11 @@ export async function buildDossier(
       documentId,
       msg === TRUNCATED
         ? "Model kehabisan token output sebelum dossier selesai. Coba model lain di Pengaturan."
-        : "Gagal membaca skripsi menjadi dossier.",
+        // Sebabnya ikut dibawa: PDF-nya hampir selalu tidak bersalah — yang
+        // gagal adalah panggilan model (key, kuota, nama model). Tanpa sebab
+        // ini UI cuma bisa menyarankan "unggah PDF lain", dan user mengulang
+        // kegagalan yang sama.
+        : `Pembacaan naskah oleh model gagal: ${msg}`,
     );
   }
 }

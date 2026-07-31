@@ -14,6 +14,7 @@ import type {
   DossierView,
   DossierStatus,
 } from "./types.js";
+import type { Persona } from "./personas.js";
 
 function sendJson(method: string, url: string, body: unknown): Promise<Response> {
   return fetch(url, {
@@ -36,7 +37,7 @@ export function setUnauthorizedHandler(fn: () => void): void {
   onUnauthorized = fn;
 }
 
-async function jsonOrThrow(res: Response) {
+export async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     if (res.status === 401) onUnauthorized?.();
@@ -104,6 +105,10 @@ export async function getSettings(): Promise<SettingsView> {
   return jsonOrThrow(await fetch("/api/settings"));
 }
 
+export async function getPersonas(): Promise<Persona[]> {
+  return (await jsonOrThrow(await fetch("/api/settings/personas"))).personas;
+}
+
 export async function getUsage(): Promise<UsageView> {
   return jsonOrThrow(await fetch("/api/settings/usage"));
 }
@@ -116,6 +121,7 @@ export async function saveSettings(body: {
   provider?: string;
   api_key?: string;
   model?: string;
+  base_url?: string;
   attack_points?: string;
   examiner_mode?: string;
   examiner_type?: string;
@@ -149,6 +155,7 @@ export async function getTtsVoices(provider: string): Promise<TtsVoice[]> {
 export async function testLlm(body: {
   provider?: string;
   model?: string;
+  base_url?: string;
   api_key?: string;
 }): Promise<TestResult> {
   return jsonOrThrow(await postJson("/api/settings/test-llm", body));

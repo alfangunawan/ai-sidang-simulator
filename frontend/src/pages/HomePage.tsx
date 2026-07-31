@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { listSessions, getSkripsi, getSettings } from "../api.js";
 import type { SessionSummary, SkripsiInfo, SettingsView } from "../types.js";
 import { formatDate, scoreTone, gradeOf } from "../lib/sessions.js";
 import type { MicState } from "../components/SetupModal.js";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 const STEPS = [
   [
@@ -28,6 +33,17 @@ const PROVIDER_LABELS: Record<string, string> = {
   claude: "Claude",
   openrouter: "OpenRouter",
 };
+
+const SCORE_TONE: Record<string, string> = {
+  good: "bg-success/15 text-success",
+  mid: "bg-primary/10 text-primary",
+  low: "bg-destructive/10 text-destructive",
+};
+
+/** Score pill colouring, shared with Riwayat so a score reads the same in both. */
+export function scoreChipClass(score: number | null): string {
+  return SCORE_TONE[scoreTone(score)] ?? "bg-muted text-muted-foreground";
+}
 
 interface Props {
   mic: MicState;
@@ -62,6 +78,7 @@ export function HomePage({
 
   const recent = sessions.slice(0, 3);
   const lastScored = sessions.find((s) => s.final_score != null);
+  const effProvider = settings?.effective_provider ?? settings?.provider ?? "";
 
   const readiness = [
     {
@@ -77,8 +94,9 @@ export function HomePage({
     {
       key: "model",
       label: "Model AI",
+      // Model yang benar-benar akan menjawab — milik host bila key-nya dipinjam.
       value: settings
-        ? `${PROVIDER_LABELS[settings.provider] ?? settings.provider} · ${settings.model}`
+        ? `${PROVIDER_LABELS[effProvider] ?? effProvider} · ${settings.effective_model ?? settings.model}`
         : "Memuat…",
       ok: !!settings && (settings.has_api_key || !!settings.effective_ai_shared),
       action: "Atur",
@@ -99,115 +117,164 @@ export function HomePage({
     },
   ];
 
+  // The single mobile column is spelled minmax(0,1fr) rather than left implicit:
+  // an implicit `auto` track is floored at its items' min-content, and a
+  // `truncate` row reports its untruncated width there, which pushed the whole
+  // page wider than the viewport.
   return (
-    <div className="split split-wide">
-      <div className="stack-lg">
-        <section className="card card-lg home-hero">
-          <span className="eyebrow">Simulasi sidang skripsi</span>
-          <h1>Siap latihan sidang?</h1>
-          <p>
-            Penguji bertanya langsung dari naskah skripsi Anda. Pilih karakter
-            penguji, jawab secara lisan, lalu terima penilaian dan catatan revisi
-            begitu sidang ditutup.
-          </p>
-          <div className="home-cta">
-            {resumable && (
-              <button className="primary lg" onClick={onResume}>
-                Lanjutkan Sidang
-              </button>
-            )}
-            <button className={resumable ? "lg" : "primary lg"} onClick={onStart}>
-              {resumable ? "Mulai Sesi Baru" : "Mulai Latihan Sidang"}
-            </button>
-            <button className="lg" onClick={onOpenHistory}>
-              Lihat riwayat sesi
-            </button>
-          </div>
-        </section>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="flex flex-col gap-6">
+        <Card className="overflow-hidden">
+          <CardContent className="relative">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-24 -right-24 size-64 rounded-full bg-primary/10 blur-3xl"
+            />
+            <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
+              Simulasi sidang skripsi
+            </span>
+            <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+              Siap latihan sidang?
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              Penguji bertanya langsung dari naskah skripsi Anda. Pilih karakter
+              penguji, jawab secara lisan, lalu terima penilaian dan catatan revisi
+              begitu sidang ditutup.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {resumable && (
+                <Button size="lg" onClick={onResume}>
+                  Lanjutkan Sidang
+                </Button>
+              )}
+              <Button
+                size="lg"
+                variant={resumable ? "outline" : "default"}
+                onClick={onStart}
+              >
+                {resumable ? "Mulai Sesi Baru" : "Mulai Latihan Sidang"}
+              </Button>
+              <Button size="lg" variant="ghost" onClick={onOpenHistory}>
+                Lihat riwayat sesi
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-        <section className="card">
-          <h3>Bagaimana sidang berjalan</h3>
-          <div className="steps">
+        <Card>
+          <CardHeader>
+            <CardTitle>Bagaimana sidang berjalan</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-5 sm:grid-cols-3">
             {STEPS.map(([n, title, desc]) => (
-              <div className="step" key={n}>
-                <span className="step-n">{n}</span>
-                <span className="step-title">{title}</span>
-                <span className="step-desc">{desc}</span>
+              <div key={n}>
+                <span className="font-mono text-xs font-bold text-primary">{n}</span>
+                <div className="mt-1 text-sm font-semibold">{title}</div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{desc}</p>
               </div>
             ))}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <section className="card card-flush">
-          <div className="panel-head">
-            <span className="eyebrow">Sesi terakhir</span>
-            <button className="ghost sm" onClick={onOpenHistory}>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+            <CardTitle className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+              Sesi terakhir
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={onOpenHistory}>
               Lihat semua
-            </button>
-          </div>
-          {recent.length === 0 ? (
-            <p className="empty-sub panel-empty">
-              Belum ada sesi. Mulai latihan pertama Anda dari tombol di atas.
-            </p>
-          ) : (
-            <ul className="history-list flush">
-              {recent.map((s) => (
-                <li key={s.id} className="history-row">
-                  <div className={`score-badge ${scoreTone(s.final_score)}`}>
-                    {s.final_score ?? "—"}
-                  </div>
-                  <div className="history-meta">
-                    <span className="history-title">{s.label ?? "Sesi latihan"}</span>
-                    <span className="history-count">
-                      {formatDate(s.created_at)} · {s.turn_count} percakapan
-                      {s.final_score != null && ` · Skor ${s.final_score}`}
-                    </span>
-                  </div>
-                  <div className="history-actions">
-                    <button className="sm" onClick={() => onOpenSession(s.id)}>
+              <ArrowRight />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {recent.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Belum ada sesi. Mulai latihan pertama Anda dari tombol di atas.
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {recent.map((s) => (
+                  <li key={s.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                    <div
+                      className={cn(
+                        "flex size-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
+                        scoreChipClass(s.final_score),
+                      )}
+                    >
+                      {s.final_score ?? "—"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">
+                        {s.label ?? "Sesi latihan"}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {formatDate(s.created_at)} · {s.turn_count} percakapan
+                        {s.final_score != null && ` · Skor ${s.final_score}`}
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => onOpenSession(s.id)}>
                       Buka
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <aside className="stack">
-        <div className="card">
-          <span className="eyebrow">Kesiapan</span>
-          <div className="readiness">
-            {readiness.map((r) => (
-              <div className="ready-row" key={r.key}>
-                <span className={`ready-dot ${r.ok ? "ok" : "warn"}`} aria-hidden="true" />
-                <div className="ready-meta">
-                  <span className="ready-label">{r.label}</span>
-                  <span className="ready-value">{r.value}</span>
+      <aside className="flex flex-col gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+              Kesiapan
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {readiness.map((r, i) => (
+              <div key={r.key}>
+                {i > 0 && <Separator />}
+                <div className="ready-row flex items-center gap-3 py-3 first:pt-0">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "ready-dot size-2 shrink-0 rounded-full",
+                      r.ok ? "ok bg-success" : "warn bg-warning",
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold">{r.label}</div>
+                    <div className="truncate text-xs text-muted-foreground">{r.value}</div>
+                  </div>
+                  <Button variant="outline" size="xs" onClick={r.onClick}>
+                    {r.action}
+                  </Button>
                 </div>
-                <button className="sm" onClick={r.onClick}>
-                  {r.action}
-                </button>
               </div>
             ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="tip-card score-card">
-          <span className="eyebrow">Skor terakhir</span>
-          <div className="score-card-val">
-            <strong>{lastScored?.final_score ?? "—"}</strong>
-            <span>
-              /100 · {lastScored ? gradeOf(lastScored.final_score as number) : "—"}
+        <Card className="score-card border-transparent bg-primary text-primary-foreground">
+          <CardContent>
+            <span className="text-[11px] font-bold tracking-widest text-primary-foreground/70 uppercase">
+              Skor terakhir
             </span>
-          </div>
-          <p>
-            {lastScored
-              ? `${lastScored.label ?? "Sesi latihan"} · ${formatDate(lastScored.created_at)}`
-              : "Belum ada sesi yang dinilai."}
-          </p>
-        </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <strong className="font-serif text-4xl leading-none font-semibold">
+                {lastScored?.final_score ?? "—"}
+              </strong>
+              <span className="text-sm text-primary-foreground/80">
+                /100 · {lastScored ? gradeOf(lastScored.final_score as number) : "—"}
+              </span>
+            </div>
+            <p className="mt-3 text-xs text-primary-foreground/80">
+              {lastScored
+                ? `${lastScored.label ?? "Sesi latihan"} · ${formatDate(lastScored.created_at)}`
+                : "Belum ada sesi yang dinilai."}
+            </p>
+          </CardContent>
+        </Card>
       </aside>
     </div>
   );

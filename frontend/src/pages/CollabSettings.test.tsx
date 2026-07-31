@@ -34,7 +34,9 @@ describe("CollabSettings", () => {
     expect(await screen.findByText("deadbeefdead")).toBeTruthy();
     // three share toggles (AI / Suara / Diktasi) render for a host
     expect(screen.getAllByRole("checkbox")).toHaveLength(3);
-    expect((screen.getByRole("checkbox", { name: /AI/ }) as HTMLInputElement).checked).toBe(true);
+    // The toggle is a Radix checkbox (a <button role="checkbox">), so its state
+    // lives in aria-checked rather than an input's .checked property.
+    expect(screen.getByRole("checkbox", { name: /AI/ }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("shows both the host panel and the joined panel when a user hosts AND is joined elsewhere", async () => {

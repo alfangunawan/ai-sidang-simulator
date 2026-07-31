@@ -1,4 +1,6 @@
 import Database from "better-sqlite3";
+import { seedQuestions } from "./repos/questions.js";
+import { seedPersonas } from "./repos/personas.js";
 
 const MIGRATION = `
 CREATE TABLE IF NOT EXISTS sessions (
@@ -97,6 +99,28 @@ CREATE TABLE IF NOT EXISTS collaboration_members (
   FOREIGN KEY (collaboration_id) REFERENCES collaborations(id) ON DELETE CASCADE,
   FOREIGN KEY (member_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS question_bank (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  phase    TEXT NOT NULL,
+  text     TEXT NOT NULL,
+  position INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_question_bank_phase ON question_bank(phase, position);
+
+CREATE TABLE IF NOT EXISTS personas (
+  key      TEXT PRIMARY KEY,
+  name     TEXT NOT NULL,
+  initials TEXT NOT NULL,
+  role     TEXT NOT NULL,
+  mode     TEXT NOT NULL,
+  type     TEXT NOT NULL,
+  color    TEXT NOT NULL,
+  trait    TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  active   INTEGER NOT NULL DEFAULT 1
+);
 `;
 
 function addColumnIfMissing(
@@ -128,5 +152,9 @@ export function openDb(path: string): Database.Database {
   addColumnIfMissing(db, "documents", "dossier_model", "dossier_model TEXT");
   addColumnIfMissing(db, "usage_events", "user_id", "user_id INTEGER");
   addColumnIfMissing(db, "usage_events", "key_owner_user_id", "key_owner_user_id INTEGER");
+  addColumnIfMissing(db, "users", "is_admin", "is_admin INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "users", "suspended", "suspended INTEGER NOT NULL DEFAULT 0");
+  seedQuestions(db);
+  seedPersonas(db);
   return db;
 }

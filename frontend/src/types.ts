@@ -1,4 +1,4 @@
-export interface User { id: number; username: string; }
+export interface User { id: number; username: string; is_admin: boolean; }
 export type Role = "examiner" | "user";
 export interface Turn { role: Role; content: string; }
 export interface ExaminerMode {
@@ -9,6 +9,7 @@ export type ExaminerType = ExaminerMode;
 export interface SettingsView {
   provider: string;
   model: string;
+  base_url: string;
   has_api_key: boolean;
   attack_points: string;
   examiner_mode: string;
@@ -21,6 +22,9 @@ export interface SettingsView {
   has_openai_tts_key: boolean;
   stt_provider: string;
   has_openai_stt_key: boolean;
+  effective_provider?: string;
+  effective_model?: string;
+  effective_base_url?: string;
   effective_ai_shared?: boolean;
   effective_tts_shared?: boolean;
   effective_stt_shared?: boolean;
@@ -128,4 +132,53 @@ export interface Assessment {
   kelebihan: string[];
   kekurangan: string[];
   saran: string[];
+}
+export interface AdminOverview {
+  users: number;
+  sessions: number;
+  documents: number;
+  turns: number;
+  cost_usd: number;
+  tokens: number;
+  top_spenders: { user_id: number; username: string; cost_usd: number; tokens: number }[];
+  signups: { day: string; count: number }[];
+}
+export interface AdminUserRow {
+  id: number;
+  username: string;
+  created_at: string;
+  suspended: boolean;
+  is_admin: boolean;
+  sessions: number;
+  documents: number;
+  cost_usd: number;
+  tokens: number;
+  key_owner: string | null;
+}
+export interface AdminUserDetail {
+  user: AdminUserRow;
+  settings: SettingsView;
+  sessions: { id: string; created_at: string; status: string; turn_count: number }[];
+  documents: { id: number; filename: string; char_count: number; dossier_status: string | null }[];
+}
+export interface AdminSessionRow {
+  id: string;
+  user_id: number;
+  username: string;
+  created_at: string;
+  status: string;
+  label: string | null;
+  turn_count: number;
+  final_score: number | null;
+}
+export interface AdminCodeRow {
+  id: number;
+  host_user_id: number;
+  host_username: string;
+  invite_code: string;
+  created_at: string;
+  shares: { share_ai: number; share_tts: number; share_stt: number };
+  members: { member_user_id: number; username: string; joined_at: string }[];
+  cost_usd: number;
+  calls: number;
 }

@@ -40,6 +40,7 @@ const DOSSIER: Dossier = {
 const VIEW: SettingsView = {
   provider: "claude",
   model: "claude-sonnet-5",
+    base_url: "",
   has_api_key: false,
   attack_points: "POIN A",
   examiner_mode: "standar",
@@ -73,6 +74,17 @@ const EMPTY_TOTALS = {
   cost_usd: 0,
   calls: 0,
 };
+
+// The pickers are Radix selects: the options only exist once the trigger is
+// opened, and the trigger opens on pointerdown rather than click.
+async function pick(triggerLabel: string, optionName: string | RegExp) {
+  fireEvent.pointerDown(screen.getByLabelText(triggerLabel), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: optionName }));
+}
 
 beforeEach(() => {
   vi.spyOn(api, "getSettings").mockResolvedValue(VIEW);
@@ -130,6 +142,79 @@ describe("SettingsPage", () => {
     );
   });
 
+  // Selama tergabung, setelan sendiri diabaikan saat sidang berjalan. Kolom yang
+  // bisa disunting tapi tidak berpengaruh adalah jebakan, jadi yang tampil harus
+  // setelan host dan terkunci.
+  it("locks AI/TTS/STT to the host's settings while joined to a collab", async () => {
+    vi.spyOn(api, "getSettings").mockResolvedValue({
+      ...VIEW,
+      tts_provider: "openai",
+      tts_voice: "alloy",
+      effective_ai_shared: true,
+      effective_tts_shared: true,
+      effective_stt_shared: true,
+      effective_provider: "openrouter",
+      effective_model: "z-ai/glm-4.6",
+      effective_tts_provider: "google",
+      effective_tts_voice: "id-ID-Chirp3-HD-Kore",
+      effective_stt_provider: "whisper",
+    });
+    vi.spyOn(api, "getTtsVoices").mockResolvedValue([]);
+    const save = vi.spyOn(api, "saveSettings").mockResolvedValue(VIEW);
+
+    render(<SettingsPage />);
+    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+
+    // nilai host yang ditampilkan, bukan milik sendiri
+    expect(screen.getByText("z-ai/glm-4.6")).toBeTruthy();
+    expect(screen.getByText("id-ID-Chirp3-HD-Kore")).toBeTruthy();
+    expect(screen.getByText("Whisper API (OpenAI)")).toBeTruthy();
+
+    // dan tidak satu pun bisa disunting
+    expect(screen.queryByLabelText("Provider")).toBeNull();
+    expect(screen.queryByLabelText("Provider Suara")).toBeNull();
+    expect(screen.queryByLabelText("Provider Diktasi")).toBeNull();
+    expect(screen.queryByPlaceholderText(/API key/i)).toBeNull();
+
+    // menyimpan tidak boleh menimpa setelan sendiri dengan setelan host
+    fireEvent.click(screen.getByText("Simpan Pengaturan"));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    const body = save.mock.calls[0][0];
+    expect(body).not.toHaveProperty("provider");
+    expect(body).not.toHaveProperty("model");
+    expect(body).not.toHaveProperty("tts_provider");
+    expect(body).not.toHaveProperty("stt_provider");
+  });
+
+  it("reveals the URL field when the provider is 9router and saves it", async () => {
+    const save = vi.spyOn(api, "saveSettings").mockResolvedValue({
+      ...VIEW,
+      provider: "9router",
+      base_url: "https://api.9router.ai/v1",
+    });
+
+    render(<SettingsPage />);
+    await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
+
+    await pick("Provider", "9router (URL sendiri)");
+
+    const urlField = await screen.findByPlaceholderText(/https:\/\/api\.9router/i);
+    fireEvent.change(urlField, { target: { value: "https://api.9router.ai/v1" } });
+    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "gpt-x" } });
+
+    fireEvent.click(screen.getByText("Simpan Pengaturan"));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "9router",
+          model: "gpt-x",
+          base_url: "https://api.9router.ai/v1",
+        }),
+      ),
+    );
+  });
+
   it("reveals Google key + voice fields when TTS provider is Google and saves them", async () => {
     vi.spyOn(api, "getTtsVoices").mockResolvedValue([
       { name: "id-ID-Chirp3-HD-Kore", type: "Chirp3-HD", gender: "FEMALE" },
@@ -144,10 +229,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const ttsSelect = (
-      await screen.findByText("Google Cloud (Neural2 / Chirp3-HD)")
-    ).closest("select") as HTMLSelectElement;
-    fireEvent.change(ttsSelect, { target: { value: "google" } });
+    await pick("Provider Suara", "Google Cloud (Neural2 / Chirp3-HD)");
 
     // voice list loads and the Google key field appears
     await screen.findByText("id-ID-Chirp3-HD-Kore");
@@ -177,10 +259,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const sttSelect = (await screen.findByText("Whisper API (OpenAI)")).closest(
-      "select",
-    ) as HTMLSelectElement;
-    fireEvent.change(sttSelect, { target: { value: "whisper" } });
+    await pick("Provider Diktasi", "Whisper API (OpenAI)");
 
     const keyField = await screen.findByPlaceholderText(/tempel OpenAI API key/i);
     fireEvent.change(keyField, { target: { value: "sk-stt-1" } });
@@ -199,10 +278,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const sttSelect = (await screen.findByText("Whisper API (OpenAI)")).closest(
-      "select",
-    ) as HTMLSelectElement;
-    fireEvent.change(sttSelect, { target: { value: "whisper" } });
+    await pick("Provider Diktasi", "Whisper API (OpenAI)");
 
     fireEvent.change(await screen.findByPlaceholderText(/tempel OpenAI API key/i), {
       target: { value: "sk-typed" },
@@ -238,10 +314,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     await waitFor(() => expect(api.getSettings).toHaveBeenCalled());
 
-    const ttsSelect = (
-      await screen.findByText("Google Cloud (Neural2 / Chirp3-HD)")
-    ).closest("select") as HTMLSelectElement;
-    fireEvent.change(ttsSelect, { target: { value: "google" } });
+    await pick("Provider Suara", "Google Cloud (Neural2 / Chirp3-HD)");
 
     await screen.findByText("id-ID-Chirp3-HD-Kore");
     fireEvent.click(screen.getByText(/Preview/));

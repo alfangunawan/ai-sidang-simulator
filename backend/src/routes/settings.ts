@@ -9,9 +9,16 @@ import {
 import { getProvider } from "../providers/index.js";
 import { getUsageView, resetUsage } from "../repos/usage.js";
 import { resolveSourceUser, getEffectiveTtsConfig } from "../effectiveConfig.js";
+import { listPersonas } from "../repos/personas.js";
 
 export function settingsRouter(db: Database.Database, key: Buffer): Router {
   const r = Router();
+
+  // Dibaca picker penguji dan header sidang, jadi terbuka untuk semua pengguna
+  // yang sudah masuk — yang admin-only hanya penyuntingannya.
+  r.get("/personas", (_req, res) => {
+    res.json({ personas: listPersonas(db) });
+  });
 
   r.get("/", (req, res) => {
     const userId = req.userId!;
@@ -32,6 +39,12 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
     }
     res.json({
       ...view,
+      // Yang benar-benar dipakai saat sidang berjalan. Untuk anggota kolaborasi
+      // ini milik host, dan itulah yang harus dibaca UI — bukan setelan sendiri
+      // yang selama tergabung diabaikan.
+      effective_provider: getSetting(db, aiSrc, "provider") ?? view.provider,
+      effective_model: getSetting(db, aiSrc, "model") ?? view.model,
+      effective_base_url: getSetting(db, aiSrc, "base_url") ?? view.base_url,
       effective_ai_shared: aiSrc !== userId,
       effective_tts_shared: ttsSrc !== userId,
       effective_stt_shared: sttSrc !== userId,
@@ -47,6 +60,7 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
     const fields = [
       "provider",
       "model",
+      "base_url",
       "api_key",
       "attack_points",
       "examiner_mode",
@@ -62,6 +76,11 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
       if (field in body && typeof body[field] !== "string") {
         return res.status(400).json({ error: "Field harus berupa string" });
       }
+    }
+    // Base URL ini dipakai server untuk memanggil ke luar, jadi skemanya
+    // dibatasi di sini — bukan di UI, yang bisa dilewati.
+    if (body.base_url && !/^https?:\/\//i.test(body.base_url)) {
+      return res.status(400).json({ error: "URL API harus diawali http:// atau https://" });
     }
     saveSettings(db, userId, key, body);
     res.json(getSettingsView(db, userId));
@@ -85,6 +104,7 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
     const body = req.body ?? {};
     const provider = (body.provider as string) ?? getSetting(db, userId, "provider") ?? "claude";
     const model = (body.model as string) ?? getSetting(db, userId, "model") ?? "";
+    const baseUrl = (body.base_url as string) ?? getSetting(db, userId, "base_url") ?? "";
     const apiKey =
       typeof body.api_key === "string" && body.api_key
         ? body.api_key
@@ -93,10 +113,21 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
       return res.json({ ok: false, error: "API key belum diisi" });
     }
     try {
-      await getProvider({ provider, model, apiKey }).checkAuth();
+      await getProvider({ provider, model, apiKey, baseUrl }).checkAuth();
       res.json({ ok: true });
-    } catch {
-      res.json({ ok: false, error: "Koneksi gagal — periksa provider / API key" });
+    } catch (e) {
+      // Sebab aslinya diteruskan, bukan diringkas jadi "koneksi gagal": yang
+      // membedakan URL salah (404) dari key salah (401) justru pesan itu, dan
+      // tanpanya user menebak-nebak kolom mana yang keliru. Key disaring dulu —
+      // SDK pihak ketiga tidak menjanjikan pesannya bersih.
+      // Panjang minimum penting: key sependek "k" akan mencacah kata biasa
+      // ("tidak" jadi "tida***"). Key sungguhan tidak pernah sependek itu.
+      const raw = e instanceof Error ? e.message : "";
+      const msg = apiKey.length >= 8 ? raw.split(apiKey).join("***") : raw;
+      res.json({
+        ok: false,
+        error: msg || "Koneksi gagal — periksa provider / URL / API key",
+      });
     }
   });
 

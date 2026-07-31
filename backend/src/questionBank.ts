@@ -109,11 +109,13 @@ export function phaseWindow(examinerCount: number): string[] {
  * modul kritik yang dipicu skripsi ini. Berubah beberapa kali per sesi, jadi ia
  * duduk SESUDAH blok persona+dossier yang di-cache.
  */
-export function buildPhaseBlock(examinerCount: number, triggered: string[]): string {
-  const phases = phaseWindow(examinerCount).filter((p) => QUESTION_BANK[p]?.length);
-  const blocks = phases.map(
-    (p) => `${p}:\n${QUESTION_BANK[p].map((q) => `- ${q}`).join("\n")}`,
-  );
+export function buildPhaseBlock(
+  examinerCount: number,
+  triggered: string[],
+  bank: Record<string, string[]> = QUESTION_BANK,
+): string {
+  const phases = phaseWindow(examinerCount).filter((p) => bank[p]?.length);
+  const blocks = phases.map((p) => `${p}:\n${bank[p].map((q) => `- ${q}`).join("\n")}`);
   const modules = triggered
     .filter((t) => CRITIQUE_MODULES[t])
     .map((t) => CRITIQUE_MODULES[t]);

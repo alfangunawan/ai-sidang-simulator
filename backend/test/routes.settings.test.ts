@@ -96,6 +96,39 @@ describe("settings routes", () => {
     expect(res.body.ok).toBe(false);
   });
 
+  // Base URL tanpa /v1 adalah kekeliruan paling sering; kalau pesannya
+  // diringkas jadi "koneksi gagal", user menyalahkan API key-nya.
+  it("POST /test-llm blames the URL, not the key, on 404", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404 })) as any);
+    const { agent } = await app();
+    const res = await agent.post("/settings/test-llm").send({
+      provider: "9router",
+      model: "x/y",
+      base_url: "https://9router.example",
+      api_key: "k",
+    });
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error).toMatch(/URL API tidak ditemukan/);
+  });
+
+  it("POST /test-llm never echoes the API key back", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("connect ECONNREFUSED using key sk-SECRET-123");
+      }) as any,
+    );
+    const { agent } = await app();
+    const res = await agent.post("/settings/test-llm").send({
+      provider: "9router",
+      model: "x/y",
+      base_url: "https://9router.example/v1",
+      api_key: "sk-SECRET-123",
+    });
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error).not.toContain("sk-SECRET-123");
+  });
+
   it("GET /usage starts empty and DELETE /usage clears it", async () => {
     const { agent, db, userId } = await app();
     const empty = await agent.get("/settings/usage");

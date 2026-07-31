@@ -25,7 +25,13 @@ export function resolveSourceUser(db: Database.Database, userId: number, cap: Ca
 export function getEffectiveLlmConfig(db: Database.Database, userId: number, key: Buffer) {
   const src = resolveSourceUser(db, userId, "ai");
   const base = getActiveConfig(db, src, key); // throws "API key belum diset" if src has none
-  return { provider: base.provider, model: base.model, apiKey: base.apiKey, ...getPersona(db, userId) };
+  return {
+    provider: base.provider,
+    model: base.model,
+    baseUrl: base.baseUrl,
+    apiKey: base.apiKey,
+    ...getPersona(db, userId),
+  };
 }
 
 export function getEffectiveTtsConfig(db: Database.Database, userId: number, key: Buffer) {

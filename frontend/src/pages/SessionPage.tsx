@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Download, Mic, Send, Square } from "lucide-react";
 import {
   createSession,
   getTurns,
@@ -18,29 +19,35 @@ import { Transcript } from "../components/Transcript.js";
 import { ConfirmModal } from "../components/ConfirmModal.js";
 import { stripMarkdown } from "../lib/markdown.js";
 import { turnsToCsv, downloadCsv } from "../lib/csv.js";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export const SESSION_KEY = "sibiru_session_id";
-// When the practice clock started, kept per session so a refresh resumes the
-// same count instead of restarting it — and so it stays at 0:00 until the
-// student actually begins.
-const START_KEY = "sibiru_session_started_at";
+// Detik yang SUDAH berjalan di sesi ini, bukan jam mulainya. Menyimpan jam
+// mulai membuat jam terus menghitung selagi mahasiswa keluar atau me-refresh —
+// waktu di luar halaman ikut masuk ke durasi sidang. Yang dicatat karena itu
+// hitungannya sendiri, disimpan tiap detik, dan dilanjutkan saat halaman
+// kembali dibuka. Tidak ada isinya = mahasiswa belum mulai, jam tetap 0:00.
+const ELAPSED_KEY = "sibiru_session_elapsed";
 
 /** Forget the current sitting so the next mount opens a brand-new session. */
 export function clearStoredSession(): void {
   localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(START_KEY);
+  localStorage.removeItem(ELAPSED_KEY);
 }
 
 export function hasStoredSession(): boolean {
   return localStorage.getItem(SESSION_KEY) !== null;
 }
 
-function loadStart(id: string): number | null {
+/** Detik yang sudah berjalan pada sesi `id`; null bila sidang belum dimulai. */
+function loadElapsed(id: string): number | null {
   try {
-    const raw = localStorage.getItem(START_KEY);
+    const raw = localStorage.getItem(ELAPSED_KEY);
     if (!raw) return null;
-    const saved = JSON.parse(raw) as { id?: string; at?: number };
-    return saved?.id === id && typeof saved.at === "number" ? saved.at : null;
+    const saved = JSON.parse(raw) as { id?: string; secs?: number };
+    return saved?.id === id && typeof saved.secs === "number" ? saved.secs : null;
   } catch {
     return null;
   }
@@ -59,12 +66,13 @@ function clock(secs: number): string {
 }
 
 interface Props {
+  personas: Persona[];
   onClosed: (a: Assessment) => void;
   /** "Sesi Baru" hands the student back to the persona picker, not a silent reset. */
   onNewSession: () => void;
 }
 
-export function SessionPage({ onClosed, onNewSession }: Props) {
+export function SessionPage({ personas, onClosed, onNewSession }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [manual, setManual] = useState("");
@@ -79,7 +87,7 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
   // as a modal — a modal would cover the closing reply the student needs to read.
   const [proposeClose, setProposeClose] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [recSecs, setRecSecs] = useState(0);
   const stt = useSpeechRecognition(sttProvider);
@@ -100,16 +108,19 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
         localStorage.setItem(SESSION_KEY, id);
       }
       setSessionId(id);
-      setStartedAt(loadStart(id));
+      const secs = loadElapsed(id);
+      setRunning(secs !== null);
+      setElapsed(secs ?? 0);
       try {
         setTurns(await getTurns(id));
       } catch {
         // stale id (backend db reset): make a fresh one
         const fresh = await createSession();
         localStorage.setItem(SESSION_KEY, fresh);
-        localStorage.removeItem(START_KEY);
+        localStorage.removeItem(ELAPSED_KEY);
         setSessionId(fresh);
-        setStartedAt(null);
+        setRunning(false);
+        setElapsed(0);
         setTurns([]);
       }
     })();
@@ -120,7 +131,7 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
   useEffect(() => {
     getSettings()
       .then((s) => {
-        setPersona(personaFor(s.examiner_mode, s.examiner_type ?? "umum"));
+        setPersona(personaFor(personas, s.examiner_mode, s.examiner_type ?? "umum"));
         setTtsProvider(s.effective_tts_provider ?? s.tts_provider);
         setSttProvider(s.effective_stt_provider ?? s.stt_provider ?? "browser");
       })
@@ -132,19 +143,21 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
     if (el) el.scrollTop = el.scrollHeight; // scroll the panel, not the page
   }, [turns, busy]);
 
-  // The clock only runs once the student starts (first recording or first
-  // answer sent) and is measured against a stored timestamp, so a page refresh
-  // resumes the same count.
+  // Jam baru jalan setelah mahasiswa mulai (rekaman atau jawaban pertama), dan
+  // hanya selama halaman sidang terbuka: hitungannya disimpan tiap detik,
+  // sehingga refresh melanjutkan angka yang sama — bukan menambahi waktu yang
+  // dihabiskan di luar halaman.
   useEffect(() => {
-    if (startedAt === null) {
-      setElapsed(0);
-      return;
-    }
-    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
-    tick();
-    const t = setInterval(tick, 1000);
+    if (!running || !sessionId) return;
+    const t = setInterval(() => {
+      setElapsed((s) => {
+        const next = s + 1;
+        localStorage.setItem(ELAPSED_KEY, JSON.stringify({ id: sessionId, secs: next }));
+        return next;
+      });
+    }, 1000);
     return () => clearInterval(t);
-  }, [startedAt]);
+  }, [running, sessionId]);
 
   // The composer counts the current recording only — the whole-sitting clock
   // lives in the side panel, so the two never show the same number.
@@ -173,10 +186,9 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
   }, [manual]);
 
   function markStarted() {
-    if (startedAt !== null || !sessionId) return;
-    const at = Date.now();
-    localStorage.setItem(START_KEY, JSON.stringify({ id: sessionId, at }));
-    setStartedAt(at);
+    if (running || !sessionId) return;
+    localStorage.setItem(ELAPSED_KEY, JSON.stringify({ id: sessionId, secs: 0 }));
+    setRunning(true);
   }
 
   const pending = manual;
@@ -295,58 +307,90 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
   return (
     <div>
       {alerts.length > 0 && (
-        <div className="alerts" role="alert" aria-live="assertive">
+        <div className="mb-4 flex flex-col gap-2" role="alert" aria-live="assertive">
           {alerts.map((a) => (
-            <div key={a.key} className={`alert ${a.tone}`}>
-              <span className="alert-icon" aria-hidden="true">{a.icon}</span>
+            <div
+              key={a.key}
+              className={cn(
+                "alert flex items-start gap-3 rounded-lg border px-4 py-3 text-sm",
+                a.tone === "danger"
+                  ? "danger border-destructive/30 bg-destructive/5 text-destructive"
+                  : "warn border-warning/40 bg-warning/10 text-warning",
+              )}
+            >
+              <span aria-hidden="true">{a.icon}</span>
               <p>{a.text}</p>
             </div>
           ))}
         </div>
       )}
 
-      <div className="page-head">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2>Latihan Sidang</h2>
-          <p className="page-sub">
-            Jawab pertanyaan penguji secara lisan atau tertulis. Transkrip dan
-            catatan perbaikan disusun otomatis di akhir sesi.
+          <h2 className="font-serif text-2xl font-semibold tracking-tight">Latihan Sidang</h2>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            Jawab pertanyaan penguji secara lisan atau tertulis. Transkrip dan catatan
+            perbaikan disusun otomatis di akhir sesi.
           </p>
         </div>
-        <span className="head-note">
+        <span className="text-xs text-muted-foreground">
           Penguji terkunci selama sidang berjalan — ganti lewat Sesi Baru.
         </span>
       </div>
 
-      <div className="split">
-        <section className="card card-flush">
-          <header className="convo-head">
-            <div className="avatar-wrap">
-              {vizState === "speaking" && <span className="avatar-ring" />}
-              <div className="avatar" style={{ background: persona.color }} aria-hidden="true">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <Card className="overflow-hidden py-0">
+          <CardHeader className="flex flex-row items-center gap-3 border-b bg-muted/40 py-4">
+            <div className="relative">
+              {vizState === "speaking" && (
+                <span className="absolute -inset-1 animate-ping rounded-full bg-primary/30" />
+              )}
+              <div
+                className="relative flex size-10 items-center justify-center rounded-full text-xs font-bold text-white"
+                style={{ background: persona.color }}
+                aria-hidden="true"
+              >
                 {persona.initials}
               </div>
             </div>
-            <div className="convo-who">
-              <span className="convo-name">{persona.name}</span>
-              <span className="convo-role">{personaLabel}</span>
-            </div>
-            <div className="head-actions">
-              <span className={`live ${tts.preparing ? "speaking" : vizState}`}>
-                <i className="dot" />
-                {liveLabel}
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">{persona.name}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {personaLabel}
               </span>
-              <button className="sm" onClick={exportCurrent} disabled={turns.length === 0}>
-                Export
-              </button>
             </div>
-          </header>
+            <span
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                vizState === "listening"
+                  ? "bg-primary/10 text-primary"
+                  : vizState === "speaking" || tts.preparing
+                    ? "bg-warning/15 text-warning"
+                    : "bg-muted text-muted-foreground",
+              )}
+            >
+              <i className="size-1.5 rounded-full bg-current" />
+              {liveLabel}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportCurrent}
+              disabled={turns.length === 0}
+            >
+              <Download />
+              Export
+            </Button>
+          </CardHeader>
 
-          <div className="transcript-body" ref={scrollRef}>
+          <div
+            className="flex h-[46vh] min-h-72 flex-col gap-4 overflow-y-auto px-5 py-5"
+            ref={scrollRef}
+          >
             {turns.length === 0 && !busy ? (
-              <div className="empty">
-                <p>Belum ada percakapan.</p>
-                <p className="empty-sub">
+              <div className="m-auto text-center">
+                <p className="text-sm font-medium">Belum ada percakapan.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
                   Tekan <strong>Rekam</strong>, lalu mulai menjawab pertanyaan penguji.
                 </p>
               </div>
@@ -354,48 +398,58 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
               <Transcript turns={turns} persona={persona} />
             )}
             {busy && (
-              <div className="turn examiner">
+              <div className="flex items-start gap-3">
                 <div
-                  className="turn-avatar"
-                  style={{ background: persona.color, color: "#fff" }}
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                  style={{ background: persona.color }}
                   aria-hidden="true"
                 >
                   {persona.initials}
                 </div>
-                <div className="bubble examiner">
-                  <span className="who">Penguji</span>
-                  <span className="msg">
-                    <span className="dots" aria-label="Penguji sedang mengetik">
-                      <i /><i /><i />
-                    </span>
+                <div className="rounded-xl rounded-tl-sm border bg-card px-4 py-3 shadow-xs">
+                  <span className="flex gap-1" aria-label="Penguji sedang mengetik">
+                    {[0, 1, 2].map((n) => (
+                      <i
+                        key={n}
+                        className="size-1.5 animate-bounce rounded-full bg-muted-foreground"
+                        style={{ animationDelay: `${n * 0.15}s` }}
+                      />
+                    ))}
                   </span>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="composer-wrap">
+          <div className="border-t bg-muted/30 px-5 py-4">
             {proposeClose && (
-              <div className="close-hint">
-                <span className="close-hint-text">
-                  Penguji merasa sidang sudah cukup. Baca dulu catatan penutupnya,
-                  lalu pilih.
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+                <span className="flex-1 text-sm">
+                  Penguji merasa sidang sudah cukup. Baca dulu catatan penutupnya, lalu
+                  pilih.
                 </span>
-                <div className="close-hint-btns">
-                  <button className="sm" onClick={declineProposal}>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={declineProposal}>
                     Lanjut bertanya
-                  </button>
-                  <button className="sm primary" onClick={acceptProposal}>
+                  </Button>
+                  <Button size="sm" onClick={acceptProposal}>
                     Lihat hasil penilaian
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
-            <div className={`composer ${stt.listening ? "recording" : ""}`}>
+
+            <div
+              className={cn(
+                "flex items-end gap-2 rounded-xl border bg-card p-2 transition-colors",
+                stt.listening && "border-destructive/50 ring-2 ring-destructive/15",
+              )}
+            >
               {stt.supported && (
                 <>
-                  <button
-                    className={`rec ${stt.listening ? "on" : ""}`}
+                  <Button
+                    variant={stt.listening ? "destructive" : "outline"}
+                    size="sm"
                     disabled={stt.transcribing}
                     onClick={() => {
                       if (stt.listening) {
@@ -406,13 +460,17 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
                       }
                     }}
                   >
-                    <i />
+                    {stt.listening ? <Square /> : <Mic />}
                     {stt.transcribing ? "Menyalin…" : stt.listening ? "Berhenti" : "Rekam"}
-                  </button>
-                  <div className={`wave ${stt.listening ? "on" : ""}`} aria-hidden="true">
+                  </Button>
+                  <div className="hidden h-8 items-center gap-[3px] sm:flex" aria-hidden="true">
                     {WAVE_BARS.map((b, i) => (
                       <span
                         key={i}
+                        className={cn(
+                          "w-[3px] rounded-full bg-border",
+                          stt.listening && "animate-pulse bg-destructive",
+                        )}
                         style={{
                           height: `${b.height}px`,
                           animationDelay: `${b.delay}s`,
@@ -421,7 +479,15 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
                       />
                     ))}
                   </div>
-                  <span className={`clock ${stt.listening ? "on" : ""}`}>
+                  {/* Setinggi tombol Rekam dan rata tengah di dalamnya: sebagai
+                      teks inline di baris `items-end`, angkanya duduk di dasar
+                      baris — sejajar textarea, melenceng dari tombol di sebelahnya. */}
+                  <span
+                    className={cn(
+                      "hidden h-8 items-center font-mono text-xs tabular-nums sm:flex",
+                      stt.listening ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  >
                     {clock(recSecs)}
                   </span>
                 </>
@@ -431,6 +497,7 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
                 rows={1}
                 value={manual}
                 onChange={(e) => setManual(e.target.value)}
+                className="max-h-33 min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
                 placeholder={
                   stt.transcribing
                     ? "Menyalin rekaman jadi teks…"
@@ -441,17 +508,19 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
                       : "Ketik jawaban, atau tekan Rekam untuk bicara"
                 }
               />
-              <button className="primary" onClick={send} disabled={busy || !pending.trim()}>
+              <Button size="sm" onClick={send} disabled={busy || !pending.trim()}>
+                <Send />
                 {busy ? "Mengirim…" : "Kirim"}
-              </button>
+              </Button>
             </div>
 
-            <div className="composer-foot">
-              <span>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
                 {stt.supported ? (
                   <>
                     Tekan <b>Rekam</b> lalu bicara — atau ketik jawaban Anda.
-                    {sttProvider === "whisper" && " Transkrip disusun Whisper setelah rekaman berhenti."}
+                    {sttProvider === "whisper" &&
+                      " Transkrip disusun Whisper setelah rekaman berhenti."}
                   </>
                 ) : sttProvider === "whisper" ? (
                   <>Browser tidak mendukung perekaman audio — ketik jawaban Anda.</>
@@ -459,48 +528,68 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
                   <>Browser tidak mendukung Speech Recognition — ketik jawaban Anda.</>
                 )}
               </span>
-              <div className="composer-btns">
-                <button className="sm" onClick={newSession}>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={newSession}>
                   Sesi Baru
-                </button>
-                <button className="sm danger" onClick={askClose} disabled={turns.length === 0}>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={askClose}
+                  disabled={turns.length === 0}
+                >
                   Akhiri Sidang
-                </button>
+                </Button>
               </div>
             </div>
           </div>
-        </section>
+        </Card>
 
-        <aside className="stack">
-          <div className="card">
-            <div className="stat-head">
-              <span className="eyebrow">Sesi berjalan</span>
-              <span className="stat-clock">{clock(elapsed)}</span>
-            </div>
-            <div className="mini-grid">
-              <div className="mini">
-                <div className="mini-val">{questionCount}</div>
-                <div className="mini-label">Pertanyaan penguji</div>
+        <aside className="flex flex-col gap-6">
+          <Card>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+                  Sesi berjalan
+                </span>
+                <span className="font-mono text-sm tabular-nums">{clock(elapsed)}</span>
               </div>
-              <div className="mini">
-                <div className="mini-val">{answerCount}</div>
-                <div className="mini-label">Jawaban Anda</div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-muted p-3">
+                  <div className="font-serif text-2xl font-semibold">{questionCount}</div>
+                  <div className="text-[11px] text-muted-foreground">Pertanyaan penguji</div>
+                </div>
+                <div className="rounded-lg bg-muted p-3">
+                  <div className="font-serif text-2xl font-semibold">{answerCount}</div>
+                  <div className="text-[11px] text-muted-foreground">Jawaban Anda</div>
+                </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className="card orb-card">
-            <span className="eyebrow">Suara</span>
-            <VoiceVisualizer state={vizState} getLevel={mic.getLevel} size={150} />
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+                Suara
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VoiceVisualizer state={vizState} getLevel={mic.getLevel} size={150} />
+            </CardContent>
+          </Card>
 
-          <div className="tip-card">
-            <span className="eyebrow">Saran cepat</span>
-            <p>
-              Jawab dengan pola klaim → bukti → halaman. Sebut angka, tabel, atau
-              lampiran yang mendukung, lalu tutup dengan batasannya.
-            </p>
-          </div>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent>
+              <span className="text-[11px] font-bold tracking-widest text-primary uppercase">
+                Saran cepat
+              </span>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Jawab dengan pola klaim → bukti → halaman. Sebut angka, tabel, atau
+                lampiran yang mendukung, lalu tutup dengan batasannya.
+              </p>
+            </CardContent>
+          </Card>
         </aside>
       </div>
 

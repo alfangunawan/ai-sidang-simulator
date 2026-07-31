@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import { getTtsKey, getSetting } from "../repos/settings.js";
-import { getEffectiveTtsConfig } from "../effectiveConfig.js";
+import { getEffectiveTtsConfig, resolveSourceUser } from "../effectiveConfig.js";
 import {
   synthesize,
   googleVoices,
@@ -68,8 +68,12 @@ export function ttsRouter(db: Database.Database, key: Buffer): Router {
       return res.status(400).json({ error: "Preview browser dijalankan di sisi klien" });
     }
     if (!voice) return res.status(400).json({ error: "Voice belum dipilih" });
+    // Key diambil dari sumber efektif: anggota kolaborasi tidak punya key
+    // sendiri, tapi berhak mendengar suara yang akan dipakai sidangnya.
     const apiKey =
-      typeof body.key === "string" && body.key ? body.key : getTtsKey(db, userId, key, provider);
+      typeof body.key === "string" && body.key
+        ? body.key
+        : getTtsKey(db, resolveSourceUser(db, userId, "tts"), key, provider);
     if (!apiKey) return res.status(400).json({ error: "API key TTS belum diisi" });
     try {
       res.json(await synthesize({ provider, voice, apiKey }, PREVIEW_SAMPLE));
@@ -83,7 +87,7 @@ export function ttsRouter(db: Database.Database, key: Buffer): Router {
     const provider = (req.query.provider ?? "").toString();
     if (provider === "openai") return res.json({ voices: OPENAI_VOICES });
     if (provider === "google") {
-      const gkey = getTtsKey(db, userId, key, "google");
+      const gkey = getTtsKey(db, resolveSourceUser(db, userId, "tts"), key, "google");
       if (gkey) {
         try {
           return res.json({ voices: await googleVoices(gkey) });

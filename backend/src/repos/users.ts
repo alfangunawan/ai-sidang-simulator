@@ -25,11 +25,11 @@ export function getUserByUsername(
 export function getUserById(
   db: Database.Database,
   id: number,
-): { id: number; username: string } | null {
-  const row = db.prepare("SELECT id, username FROM users WHERE id = ?").get(id) as
-    | { id: number; username: string }
+): { id: number; username: string; is_admin: boolean } | null {
+  const row = db.prepare("SELECT id, username, is_admin FROM users WHERE id = ?").get(id) as
+    | { id: number; username: string; is_admin: number }
     | undefined;
-  return row ?? null;
+  return row ? { id: row.id, username: row.username, is_admin: row.is_admin === 1 } : null;
 }
 
 export function createToken(
@@ -59,4 +59,38 @@ export function getUserIdByToken(
 
 export function deleteToken(db: Database.Database, token: string): void {
   db.prepare("DELETE FROM auth_tokens WHERE token = ?").run(token);
+}
+
+export function isAdmin(db: Database.Database, userId: number): boolean {
+  const row = db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId) as
+    | { is_admin: number }
+    | undefined;
+  return row?.is_admin === 1;
+}
+
+export function setAdmin(db: Database.Database, userId: number, value: 0 | 1): void {
+  db.prepare("UPDATE users SET is_admin = ? WHERE id = ?").run(value, userId);
+}
+
+// Suspended admins can't act, so counting them as "usable" is what would let
+// a future relaxation of the self-demotion rule (a handover: "A suspends B,
+// then A demotes A") slip past `countAdmins() <= 1` while zero admins are
+// actually left standing. No relaxation exists today, but the guard should
+// hold regardless of that other rule.
+export function countAdmins(db: Database.Database): number {
+  const row = db
+    .prepare("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1 AND suspended = 0")
+    .get() as { c: number };
+  return row.c;
+}
+
+export function isSuspended(db: Database.Database, userId: number): boolean {
+  const row = db.prepare("SELECT suspended FROM users WHERE id = ?").get(userId) as
+    | { suspended: number }
+    | undefined;
+  return row?.suspended === 1;
+}
+
+export function setSuspended(db: Database.Database, userId: number, value: 0 | 1): void {
+  db.prepare("UPDATE users SET suspended = ? WHERE id = ?").run(value, userId);
 }

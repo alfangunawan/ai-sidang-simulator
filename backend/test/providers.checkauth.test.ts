@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ClaudeProvider } from "../src/providers/claude.js";
-import { OpenRouterProvider } from "../src/providers/openrouter.js";
+import { OpenAICompatProvider } from "../src/providers/openaiCompat.js";
 import { openaiCheckAuth } from "../src/providers/tts/openai.js";
+
+const OR = "https://openrouter.ai/api/v1";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -21,7 +23,7 @@ describe("ClaudeProvider.checkAuth", () => {
   });
 });
 
-describe("OpenRouterProvider.checkAuth", () => {
+describe("OpenAICompatProvider.checkAuth", () => {
   it("checks the key endpoint with the bearer token", async () => {
     const captured: { url?: string; auth?: string } = {};
     vi.stubGlobal(
@@ -32,7 +34,7 @@ describe("OpenRouterProvider.checkAuth", () => {
         return { ok: true, status: 200 } as any;
       }),
     );
-    await new OpenRouterProvider("or-key", "m").checkAuth();
+    await new OpenAICompatProvider("or-key", "m", OR, "OpenRouter", `${OR}/key`).checkAuth();
     expect(captured.url).toContain("openrouter.ai/api/v1/key");
     expect(captured.auth).toBe("Bearer or-key");
   });
@@ -42,7 +44,7 @@ describe("OpenRouterProvider.checkAuth", () => {
       "fetch",
       vi.fn(async () => ({ ok: false, status: 401 })) as any,
     );
-    const p = new OpenRouterProvider("or-SECRET", "m");
+    const p = new OpenAICompatProvider("or-SECRET", "m", OR, "OpenRouter", `${OR}/key`);
     await expect(p.checkAuth()).rejects.toThrow(/401/);
     await expect(p.checkAuth()).rejects.not.toThrow(/or-SECRET/);
   });
