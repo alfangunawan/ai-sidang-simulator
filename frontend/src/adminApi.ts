@@ -2,6 +2,7 @@ import { jsonOrThrow } from "./api.js";
 import type {
   AdminOverview,
   AdminUserRow,
+  AdminUserDetail,
   AdminSessionRow,
   AdminCodeRow,
   Turn,
@@ -32,6 +33,10 @@ export async function patchUser(
 
 export async function deleteUser(id: number): Promise<void> {
   await jsonOrThrow(await fetch(`/api/admin/users/${id}`, { method: "DELETE" }));
+}
+
+export async function getUserDetail(id: number): Promise<AdminUserDetail> {
+  return jsonOrThrow(await fetch(`/api/admin/users/${id}`));
 }
 
 export async function listAllSessions(userId?: number): Promise<AdminSessionRow[]> {

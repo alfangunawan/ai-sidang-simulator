@@ -155,6 +155,12 @@ export interface AdminUserRow {
   tokens: number;
   key_owner: string | null;
 }
+export interface AdminUserDetail {
+  user: AdminUserRow;
+  settings: SettingsView;
+  sessions: { id: string; created_at: string; status: string; turn_count: number }[];
+  documents: { id: number; filename: string; char_count: number; dossier_status: string | null }[];
+}
 export interface AdminSessionRow {
   id: string;
   user_id: number;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { listUsers, patchUser, deleteUser } from "../../adminApi.js";
-import type { AdminUserRow } from "../../types.js";
+import { listUsers, patchUser, deleteUser, getUserDetail } from "../../adminApi.js";
+import type { AdminUserRow, AdminUserDetail } from "../../types.js";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,21 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 
+// Key presence hanya boolean ("Terisi"/"Kosong") — endpoint dan halaman ini
+// tidak pernah membawa nilai key aslinya, lihat backend/src/repos/admin.ts.
+const KEY_FIELDS: { field: keyof AdminUserDetail["settings"]; label: string }[] = [
+  { field: "has_api_key", label: "API key LLM" },
+  { field: "has_google_tts_key", label: "API key TTS Google" },
+  { field: "has_openai_tts_key", label: "API key TTS OpenAI" },
+  { field: "has_openai_stt_key", label: "API key STT OpenAI" },
+];
+
 export function Users({ selfId }: { selfId: number }) {
   const [rows, setRows] = useState<AdminUserRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [doomed, setDoomed] = useState<AdminUserRow | null>(null);
   const [typed, setTyped] = useState("");
+  const [detail, setDetail] = useState<AdminUserDetail | null>(null);
 
   function reload() {
     listUsers().then(setRows).catch((e) => setErr((e as Error).message));
@@ -33,8 +43,17 @@ export function Users({ selfId }: { selfId: number }) {
     }
   }
 
+  async function openDetail(u: AdminUserRow) {
+    setErr(null);
+    try {
+      setDetail(await getUserDetail(u.id));
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
   if (err && !rows) return <p role="alert" className="text-sm text-destructive">{err}</p>;
-  if (!rows) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  if (!rows) return <p className="text-sm text-muted-foreground" aria-live="polite">Memuat…</p>;
 
   return (
     <div className="space-y-4">
@@ -79,39 +98,44 @@ export function Users({ selfId }: { selfId: number }) {
                     ${u.cost_usd.toFixed(2)}
                   </TableCell>
                   <TableCell>
-                    {/* Aksi merusak terhadap diri sendiri tidak ditawarkan sama
-                        sekali; backend juga menolaknya, ini hanya agar tombolnya
-                        tidak menggoda. */}
-                    {!self && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() =>
-                            act(() => patchUser(u.id, { suspended: !u.suspended }))
-                          }
-                        >
-                          {u.suspended ? `Pulihkan ${u.username}` : `Tangguhkan ${u.username}`}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => act(() => patchUser(u.id, { is_admin: !u.is_admin }))}
-                        >
-                          {u.is_admin ? `Cabut admin ${u.username}` : `Jadikan admin ${u.username}`}
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="xs"
-                          onClick={() => {
-                            setTyped("");
-                            setDoomed(u);
-                          }}
-                        >
-                          Hapus {u.username}
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="xs" onClick={() => openDetail(u)}>
+                        Detail {u.username}
+                      </Button>
+                      {/* Aksi merusak terhadap diri sendiri tidak ditawarkan sama
+                          sekali; backend juga menolaknya, ini hanya agar tombolnya
+                          tidak menggoda. */}
+                      {!self && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() =>
+                              act(() => patchUser(u.id, { suspended: !u.suspended }))
+                            }
+                          >
+                            {u.suspended ? `Pulihkan ${u.username}` : `Tangguhkan ${u.username}`}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => act(() => patchUser(u.id, { is_admin: !u.is_admin }))}
+                          >
+                            {u.is_admin ? `Cabut admin ${u.username}` : `Jadikan admin ${u.username}`}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="xs"
+                            onClick={() => {
+                              setTyped("");
+                              setDoomed(u);
+                            }}
+                          >
+                            Hapus {u.username}
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -160,6 +184,77 @@ export function Users({ selfId }: { selfId: number }) {
               Hapus permanen
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detail !== null} onOpenChange={(next) => !next && setDetail(null)}>
+        <DialogContent className="max-h-[80dvh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detail — {detail?.user.username}</DialogTitle>
+            <DialogDescription>
+              Ini triase, bukan pemulihan kredensial: key hanya ditampilkan
+              sebagai ada/tidak, tidak pernah nilainya.
+            </DialogDescription>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="mb-2 font-medium">Pengaturan</p>
+                <div className="flex flex-wrap gap-2">
+                  {KEY_FIELDS.map(({ field, label }) => {
+                    const present = Boolean(detail.settings[field]);
+                    return (
+                      <Badge key={field} variant={present ? "secondary" : "outline"}>
+                        {label}: {present ? "Terisi" : "Kosong"}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 font-medium">Sesi ({detail.sessions.length})</p>
+                {detail.sessions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Belum ada sesi.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {detail.sessions.map((s) => (
+                      <li key={s.id} className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">
+                          {s.created_at.slice(0, 16).replace("T", " ")}
+                        </span>
+                        <Badge variant={s.status === "closed" ? "secondary" : "default"}>
+                          {s.status}
+                        </Badge>
+                        <span>{s.turn_count} giliran</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 font-medium">Naskah ({detail.documents.length})</p>
+                {detail.documents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Belum ada naskah.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {detail.documents.map((d) => (
+                      <li key={d.id} className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-medium">{d.filename}</span>
+                        <span className="text-muted-foreground">
+                          {d.char_count.toLocaleString("id-ID")} karakter
+                        </span>
+                        <span className="text-muted-foreground">
+                          {d.dossier_status ?? "—"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

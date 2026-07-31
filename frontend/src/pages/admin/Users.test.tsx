@@ -16,6 +16,27 @@ const ROWS = [
   },
 ];
 
+// api_key is not a real field of AdminUserDetail.settings — it stands in for
+// a hypothetical leak, mirroring backend/test/admin.users.test.ts's
+// "reports key presence but never key material" guard on the same endpoint.
+const DETAIL = {
+  user: ROWS[1],
+  settings: {
+    provider: "claude", model: "claude-sonnet-5", base_url: "",
+    has_api_key: true, attack_points: "", examiner_mode: "standar",
+    examiner_modes: [], examiner_type: "umum", examiner_types: [],
+    tts_provider: "browser", tts_voice: "", has_google_tts_key: false,
+    has_openai_tts_key: false, stt_provider: "browser", has_openai_stt_key: false,
+    api_key: "sk-ant-SECRETVALUE",
+  },
+  sessions: [
+    { id: "s1", created_at: "2026-07-02T10:00:00.000Z", status: "closed", turn_count: 12 },
+  ],
+  documents: [
+    { id: 1, filename: "skripsi.pdf", char_count: 302447, dossier_status: "ready" },
+  ],
+};
+
 describe("Users", () => {
   beforeEach(() => {
     vi.spyOn(adminApi, "listUsers").mockResolvedValue(ROWS as any);
@@ -62,5 +83,23 @@ describe("Users", () => {
     await screen.findByText("alfan");
     expect(screen.queryByRole("button", { name: "Hapus alfan" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Tangguhkan alfan" })).toBeNull();
+  });
+
+  it("opens the detail dialog by id and shows sessions, documents, and key presence as booleans only", async () => {
+    vi.spyOn(adminApi, "getUserDetail").mockResolvedValue(DETAIL as any);
+    render(<Users selfId={1} />);
+    await screen.findByText("budi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Detail budi" }));
+    await waitFor(() => expect(adminApi.getUserDetail).toHaveBeenCalledWith(2));
+
+    expect(await screen.findByText("skripsi.pdf")).toBeTruthy();
+    expect(screen.getByText(/302.447 karakter/)).toBeTruthy();
+    expect(screen.getByText(/API key LLM: Terisi/)).toBeTruthy();
+    expect(screen.getByText(/API key TTS Google: Kosong/)).toBeTruthy();
+
+    // Presence only — never the key material, even if it somehow arrived on
+    // the wire (see backend/test/admin.users.test.ts's matching guard).
+    expect(document.body.textContent).not.toContain("SECRETVALUE");
   });
 });
