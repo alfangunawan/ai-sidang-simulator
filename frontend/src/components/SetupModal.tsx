@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Mic, X } from "lucide-react";
-import { PERSONAS, DEFAULT_PERSONA, heatOf, heatLabel, TYPE_LABELS } from "../personas.js";
+import { DEFAULT_PERSONA, heatOf, heatLabel, TYPE_LABELS } from "../personas.js";
 import type { Persona } from "../personas.js";
 import { useAudioLevel } from "../hooks/useAudioLevel.js";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ const HEARD = 0.02;
 interface Props {
   step: 1 | 2;
   initial: Persona;
+  personas: Persona[];
   mic: MicState;
   starting: boolean;
   onStep: (step: 0 | 1 | 2) => void;
@@ -46,7 +47,16 @@ interface Props {
   onStart: (persona: Persona) => void;
 }
 
-export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStart }: Props) {
+export function SetupModal({
+  step,
+  initial,
+  personas,
+  mic,
+  starting,
+  onStep,
+  onMic,
+  onStart,
+}: Props) {
   const [pending, setPending] = useState<Persona>(initial ?? DEFAULT_PERSONA);
   // Opened straight at step 2 (the Kesiapan card's mic test) the dialog is only a
   // mic test: backing out closes it instead of dropping the student into an
@@ -135,7 +145,7 @@ export function SetupModal({ step, initial, mic, starting, onStep, onMic, onStar
                 satu — ia yang akan menemani Anda sepanjang sidang.
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
-                {PERSONAS.map((p) => {
+                {personas.map((p) => {
                   const on = p.key === pending.key;
                   const heat = heatOf(p);
                   return (

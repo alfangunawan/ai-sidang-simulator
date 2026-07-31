@@ -14,6 +14,7 @@ import type {
   DossierView,
   DossierStatus,
 } from "./types.js";
+import type { Persona } from "./personas.js";
 
 function sendJson(method: string, url: string, body: unknown): Promise<Response> {
   return fetch(url, {
@@ -102,6 +103,10 @@ export async function deleteSession(id: string): Promise<void> {
 
 export async function getSettings(): Promise<SettingsView> {
   return jsonOrThrow(await fetch("/api/settings"));
+}
+
+export async function getPersonas(): Promise<Persona[]> {
+  return (await jsonOrThrow(await fetch("/api/settings/personas"))).personas;
 }
 
 export async function getUsage(): Promise<UsageView> {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SessionPage } from "./SessionPage.js";
 import * as api from "../api.js";
+import { PERSONAS } from "../personas.js";
 
 const settingsView = {
   provider: "claude",
@@ -56,7 +57,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("SessionPage", () => {
   it("sends a manual answer and renders the examiner reply", async () => {
-    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     const textarea = screen.getByPlaceholderText(/Ketik jawaban/);
@@ -78,14 +79,14 @@ describe("SessionPage", () => {
       "sibiru_session_elapsed",
       JSON.stringify({ id: "sess-1", secs: 125 }),
     );
-    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
 
     expect(await screen.findByText("2:05")).toBeTruthy();
     expect(api.createSession).not.toHaveBeenCalled();
   });
 
   it("keeps the clock at 0:00 until the student actually starts", async () => {
-    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     expect(screen.getByText("0:00")).toBeTruthy();
@@ -95,7 +96,7 @@ describe("SessionPage", () => {
   it("Sesi Baru hands back to the picker without starting or deleting a session", async () => {
     const del = vi.spyOn(api, "deleteSession");
     const onNewSession = vi.fn();
-    render(<SessionPage onClosed={vi.fn()} onNewSession={onNewSession} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={onNewSession} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     fireEvent.click(screen.getByText("Sesi Baru"));
@@ -111,7 +112,7 @@ describe("SessionPage", () => {
       examiner_mode: "kritis",
       examiner_type: "teknis",
     });
-    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
 
     expect(await screen.findByText("Dr. Anindya Kusuma, S.T., M.T.")).toBeTruthy();
     expect(screen.getByText("Penguji teknis · mode Kritis")).toBeTruthy();
@@ -120,7 +121,7 @@ describe("SessionPage", () => {
   });
 
   it("falls back to a plain examiner when the saved pair matches no persona", async () => {
-    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
     // fixture is standar/umum, which no named persona covers
     expect(await screen.findByText("Penguji")).toBeTruthy();
   });
@@ -130,7 +131,7 @@ describe("SessionPage", () => {
       reply: "Rekap kelemahan utama: metodologi.",
       propose_close: true,
     });
-    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), {
@@ -149,7 +150,7 @@ describe("SessionPage", () => {
   it("declining an AI proposal calls continueSession and drops the banner", async () => {
     vi.spyOn(api, "postTurn").mockResolvedValue({ reply: "Baik.", propose_close: true });
     const cont = vi.spyOn(api, "continueSession").mockResolvedValue();
-    render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
     fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), { target: { value: "x" } });
     fireEvent.click(screen.getByText("Kirim"));
@@ -162,7 +163,7 @@ describe("SessionPage", () => {
 
   it("surfaces a send failure as a banner above the page heading", async () => {
     vi.spyOn(api, "postTurn").mockRejectedValue(new Error("Upload skripsi (PDF) dulu"));
-    const { container } = render(<SessionPage onClosed={vi.fn()} onNewSession={vi.fn()} />);
+    const { container } = render(<SessionPage personas={PERSONAS} onClosed={vi.fn()} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     fireEvent.change(screen.getByPlaceholderText(/Ketik jawaban/), { target: { value: "x" } });
@@ -180,7 +181,7 @@ describe("SessionPage", () => {
     const assessment = { final_score: 80 } as any;
     vi.spyOn(api, "closeSession").mockResolvedValue(assessment);
     const onClosed = vi.fn();
-    render(<SessionPage onClosed={onClosed} onNewSession={vi.fn()} />);
+    render(<SessionPage personas={PERSONAS} onClosed={onClosed} onNewSession={vi.fn()} />);
     await waitFor(() => expect(api.getTurns).toHaveBeenCalled());
 
     // "Akhiri Sidang" is disabled until there's at least one turn — same guard as "Export".

@@ -66,12 +66,13 @@ function clock(secs: number): string {
 }
 
 interface Props {
+  personas: Persona[];
   onClosed: (a: Assessment) => void;
   /** "Sesi Baru" hands the student back to the persona picker, not a silent reset. */
   onNewSession: () => void;
 }
 
-export function SessionPage({ onClosed, onNewSession }: Props) {
+export function SessionPage({ personas, onClosed, onNewSession }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [manual, setManual] = useState("");
@@ -130,7 +131,7 @@ export function SessionPage({ onClosed, onNewSession }: Props) {
   useEffect(() => {
     getSettings()
       .then((s) => {
-        setPersona(personaFor(s.examiner_mode, s.examiner_type ?? "umum"));
+        setPersona(personaFor(personas, s.examiner_mode, s.examiner_type ?? "umum"));
         setTtsProvider(s.effective_tts_provider ?? s.tts_provider);
         setSttProvider(s.effective_stt_provider ?? s.stt_provider ?? "browser");
       })

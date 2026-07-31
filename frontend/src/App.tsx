@@ -19,11 +19,12 @@ import {
   EarlyAccessModal,
   earlyAccessSeen,
 } from "./components/EarlyAccess.js";
-import { DEFAULT_PERSONA, personaFor } from "./personas.js";
+import { DEFAULT_PERSONA, PERSONAS, personaFor } from "./personas.js";
 import type { Persona } from "./personas.js";
 import {
   getResult,
   getSettings,
+  getPersonas,
   getSkripsi,
   saveSettings,
   me,
@@ -59,6 +60,9 @@ export default function App() {
   const [setup, setSetup] = useState<0 | 1 | 2>(0);
   const [needSkripsi, setNeedSkripsi] = useState(false);
   const [persona, setPersona] = useState<Persona>(DEFAULT_PERSONA);
+  // PERSONAS statis jadi nilai awal, fetch menggantinya. Picker dan header
+  // sidang karena itu tidak pernah render kosong sambil menunggu jaringan.
+  const [personas, setPersonas] = useState<Persona[]>(PERSONAS);
   const [mic, setMic] = useState<MicState>("idle");
   const [starting, setStarting] = useState(false);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
@@ -77,8 +81,13 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     getSettings()
-      .then((s) => setPersona(personaFor(s.examiner_mode, s.examiner_type ?? "umum")))
+      .then((s) => setPersona(personaFor(personas, s.examiner_mode, s.examiner_type ?? "umum")))
       .catch(() => {});
+  }, [user, personas]);
+
+  useEffect(() => {
+    if (!user) return;
+    getPersonas().then(setPersonas).catch(() => {});
   }, [user]);
 
   // Every road into a sidang goes through here, so the missing-naskah blocker is
@@ -228,10 +237,15 @@ export default function App() {
       <main className="mx-auto w-full max-w-6xl px-4 py-8">
         {tab === "beranda" &&
           (inSession ? (
-            <SessionPage key={sitting} onClosed={showResult} onNewSession={() => {
-              goHome();
-              openSetup(1);
-            }} />
+            <SessionPage
+              key={sitting}
+              personas={personas}
+              onClosed={showResult}
+              onNewSession={() => {
+                goHome();
+                openSetup(1);
+              }}
+            />
           ) : (
             <HomePage
               mic={mic}
@@ -286,6 +300,7 @@ export default function App() {
         <SetupModal
           step={setup}
           initial={persona}
+          personas={personas}
           mic={mic}
           starting={starting}
           onStep={setSetup}

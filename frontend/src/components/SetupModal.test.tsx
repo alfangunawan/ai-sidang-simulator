@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { useState } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SetupModal } from "./SetupModal.js";
-import { DEFAULT_PERSONA } from "../personas.js";
+import { DEFAULT_PERSONA, PERSONAS } from "../personas.js";
 
 // The dialog's step lives in App; this harness stands in for it.
 function Harness({ onStart, from = 1 }: { onStart: (p: any) => void; from?: 1 | 2 }) {
@@ -12,6 +12,7 @@ function Harness({ onStart, from = 1 }: { onStart: (p: any) => void; from?: 1 | 
     <SetupModal
       step={step}
       initial={DEFAULT_PERSONA}
+      personas={PERSONAS}
       mic="idle"
       starting={false}
       onStep={setStep}
