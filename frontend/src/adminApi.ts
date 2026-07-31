@@ -7,6 +7,7 @@ import type {
   Turn,
   Assessment,
 } from "./types.js";
+import type { Persona } from "./personas.js";
 
 export async function getOverview(): Promise<AdminOverview> {
   return jsonOrThrow(await fetch("/api/admin/overview"));
@@ -69,4 +70,24 @@ export async function putQuestions(phase: string, texts: string[]): Promise<void
       body: JSON.stringify({ phase, texts }),
     }),
   );
+}
+
+export type AdminPersonaRow = Persona & { position: number; active: boolean };
+
+export async function listAdminPersonas(): Promise<AdminPersonaRow[]> {
+  return (await jsonOrThrow(await fetch("/api/admin/personas"))).personas;
+}
+
+export async function putPersona(row: AdminPersonaRow): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/admin/personas/${row.key}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(row),
+    }),
+  );
+}
+
+export async function deletePersona(key: string): Promise<void> {
+  await jsonOrThrow(await fetch(`/api/admin/personas/${key}`, { method: "DELETE" }));
 }
