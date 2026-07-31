@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
 import type { Turn } from "../providers/types.js";
 import { getSettingsView } from "./settings.js";
+import { listMembers } from "./collab.js";
+import { getKeyUsageView } from "./usage.js";
 
 export interface AdminOverview {
   users: number;
@@ -224,4 +226,53 @@ export function getSessionForAdmin(
     turns,
     assessment: raw.assessment ? JSON.parse(raw.assessment) : null,
   };
+}
+
+export interface AdminCodeRow {
+  id: number;
+  host_user_id: number;
+  host_username: string;
+  invite_code: string;
+  created_at: string;
+  shares: { share_ai: number; share_tts: number; share_stt: number };
+  members: { member_user_id: number; username: string; joined_at: string }[];
+  cost_usd: number;
+  calls: number;
+}
+
+export function listAllCodes(db: Database.Database): AdminCodeRow[] {
+  const rows = db
+    .prepare(
+      `SELECT c.id, c.host_user_id, u.username AS host_username, c.invite_code,
+              c.created_at, c.share_ai, c.share_tts, c.share_stt
+       FROM collaborations c JOIN users u ON u.id = c.host_user_id
+       ORDER BY c.created_at DESC`,
+    )
+    .all() as {
+    id: number;
+    host_user_id: number;
+    host_username: string;
+    invite_code: string;
+    created_at: string;
+    share_ai: number;
+    share_tts: number;
+    share_stt: number;
+  }[];
+
+  // Anggota dan pengeluaran dipinjam dari repo kolaborasi yang sudah ada
+  // ketimbang ditulis ulang di sini.
+  return rows.map((r) => {
+    const usage = getKeyUsageView(db, r.host_user_id);
+    return {
+      id: r.id,
+      host_user_id: r.host_user_id,
+      host_username: r.host_username,
+      invite_code: r.invite_code,
+      created_at: r.created_at,
+      shares: { share_ai: r.share_ai, share_tts: r.share_tts, share_stt: r.share_stt },
+      members: listMembers(db, r.host_user_id),
+      cost_usd: usage.total.cost_usd,
+      calls: usage.total.calls,
+    };
+  });
 }

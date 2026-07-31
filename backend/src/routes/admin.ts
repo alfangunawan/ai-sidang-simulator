@@ -1,7 +1,8 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
-import { getOverview, listUsers, getUserDetail, deleteUserCompletely, listAllSessions, getSessionForAdmin } from "../repos/admin.js";
+import { getOverview, listUsers, getUserDetail, deleteUserCompletely, listAllSessions, getSessionForAdmin, listAllCodes } from "../repos/admin.js";
 import { getUserById, setAdmin, setSuspended, countAdmins } from "../repos/users.js";
+import { kickMember } from "../repos/collab.js";
 
 export function adminRouter(
   db: Database.Database,
@@ -78,6 +79,23 @@ export function adminRouter(
     const found = getSessionForAdmin(db, req.params.id);
     if (!found) return res.status(404).json({ error: "Sesi tidak ditemukan" });
     res.json(found);
+  });
+
+  r.get("/codes", (_req, res) => {
+    res.json({ codes: listAllCodes(db) });
+  });
+
+  r.delete("/codes/:hostId/members/:memberId", (req, res) => {
+    const hostId = req.params.hostId;
+    const memberId = req.params.memberId;
+    if (!/^\d+$/.test(hostId)) {
+      return res.status(400).json({ error: "hostId harus berupa angka positif" });
+    }
+    if (!/^\d+$/.test(memberId)) {
+      return res.status(400).json({ error: "memberId harus berupa angka positif" });
+    }
+    kickMember(db, Number(hostId), Number(memberId));
+    res.json({ ok: true });
   });
 
   return r;
