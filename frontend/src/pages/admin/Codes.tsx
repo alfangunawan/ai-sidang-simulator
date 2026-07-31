@@ -20,7 +20,7 @@ export function Codes() {
   useEffect(reload, []);
 
   if (err && !codes) return <p role="alert" className="text-sm text-destructive">{err}</p>;
-  if (!codes) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  if (!codes) return <p className="text-sm text-muted-foreground" aria-live="polite">Memuat…</p>;
 
   async function kick(hostId: number, memberId: number) {
     try {

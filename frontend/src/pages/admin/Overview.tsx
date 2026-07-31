@@ -22,8 +22,8 @@ export function Overview() {
     getOverview().then(setData).catch((e) => setErr((e as Error).message));
   }, []);
 
-  if (err) return <p role="alert" className="text-sm text-destructive">{err}</p>;
-  if (!data) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  if (err && !data) return <p role="alert" className="text-sm text-destructive">{err}</p>;
+  if (!data) return <p className="text-sm text-muted-foreground" aria-live="polite">Memuat…</p>;
 
   const peak = Math.max(1, ...data.signups.map((s) => s.count));
 

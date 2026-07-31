@@ -72,10 +72,15 @@ export function setAdmin(db: Database.Database, userId: number, value: 0 | 1): v
   db.prepare("UPDATE users SET is_admin = ? WHERE id = ?").run(value, userId);
 }
 
+// Suspended admins can't act, so counting them as "usable" is what would let
+// a future relaxation of the self-demotion rule (a handover: "A suspends B,
+// then A demotes A") slip past `countAdmins() <= 1` while zero admins are
+// actually left standing. No relaxation exists today, but the guard should
+// hold regardless of that other rule.
 export function countAdmins(db: Database.Database): number {
-  const row = db.prepare("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1").get() as {
-    c: number;
-  };
+  const row = db
+    .prepare("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1 AND suspended = 0")
+    .get() as { c: number };
   return row.c;
 }
 

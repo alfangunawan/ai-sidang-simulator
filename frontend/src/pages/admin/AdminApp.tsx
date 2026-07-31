@@ -43,7 +43,7 @@ export function AdminApp({ user }: { user: User }) {
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:flex-row">
         <aside className="md:w-48 md:shrink-0">
-          <nav className="flex gap-1 overflow-x-auto md:flex-col">
+          <nav aria-label="Bagian admin" className="flex gap-1 overflow-x-auto md:flex-col">
             {SECTIONS.map((s) => (
               <button
                 key={s.key}

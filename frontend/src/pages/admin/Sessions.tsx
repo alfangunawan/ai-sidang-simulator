@@ -30,7 +30,7 @@ export function Sessions() {
   }
 
   if (err && !rows) return <p role="alert" className="text-sm text-destructive">{err}</p>;
-  if (!rows) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  if (!rows) return <p className="text-sm text-muted-foreground" aria-live="polite">Memuat…</p>;
 
   return (
     <div className="space-y-4">
@@ -64,7 +64,12 @@ export function Sessions() {
                   {s.final_score ?? "—"}
                 </TableCell>
                 <TableCell>
-                  <Button variant="outline" size="xs" onClick={() => openTranscript(s)}>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    aria-label={`Lihat transkrip ${s.username} — ${s.created_at.slice(0, 16).replace("T", " ")}`}
+                    onClick={() => openTranscript(s)}
+                  >
                     Lihat transkrip
                   </Button>
                 </TableCell>

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 export function Questions() {
-  const [phases, setPhases] = useState<string[]>([]);
+  const [phases, setPhases] = useState<string[] | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -35,9 +35,8 @@ export function Questions() {
     }
   }
 
-  if (err && phases.length === 0) {
-    return <p role="alert" className="text-sm text-destructive">{err}</p>;
-  }
+  if (err && !phases) return <p role="alert" className="text-sm text-destructive">{err}</p>;
+  if (!phases) return <p className="text-sm text-muted-foreground" aria-live="polite">Memuat…</p>;
 
   return (
     <div className="space-y-6">

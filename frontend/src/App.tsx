@@ -87,7 +87,13 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    getPersonas().then(setPersonas).catch(() => {});
+    // Nilai kosong dari server tidak boleh mengosongkan picker: PERSONAS
+    // statis tetap jadi jaring pengaman kalau tabel personas pernah kosong.
+    getPersonas()
+      .then((list) => {
+        if (list.length > 0) setPersonas(list);
+      })
+      .catch(() => {});
   }, [user]);
 
   // Every road into a sidang goes through here, so the missing-naskah blocker is

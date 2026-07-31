@@ -52,4 +52,25 @@ describe("App", () => {
     await screen.findByText("Pilih dosen penguji Anda");
     for (const p of PERSONAS) expect(screen.getByText(p.name)).toBeTruthy();
   });
+
+  // Sama seed statis, tapi kali ini fetch-nya SELESAI dengan daftar kosong
+  // (server baru dipasang, tabel personas belum di-seed). setPersonas(list)
+  // tanpa pengaman akan mengosongkan picker walau fetch-nya "berhasil".
+  it("keeps the six named personas when the server answers with an empty list", async () => {
+    localStorage.setItem("sibiru_early_access", "1");
+    vi.spyOn(api, "getSkripsi").mockResolvedValue({
+      filename: "skripsi.pdf",
+      char_count: 100,
+      uploaded_at: "2026-01-01",
+      dossier_status: "ready",
+    });
+    vi.spyOn(api, "getPersonas").mockResolvedValue([]);
+    render(<App />);
+    await screen.findByText(/Siap latihan sidang/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mulai Latihan Sidang" }));
+
+    await screen.findByText("Pilih dosen penguji Anda");
+    for (const p of PERSONAS) expect(screen.getByText(p.name)).toBeTruthy();
+  });
 });
