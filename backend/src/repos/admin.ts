@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { Turn } from "../providers/types.js";
 import { getSettingsView } from "./settings.js";
 
 export interface AdminOverview {
@@ -167,4 +168,60 @@ export function deleteUserCompletely(db: Database.Database, userId: number): voi
     db.prepare("DELETE FROM usage_events WHERE user_id = ?").run(userId);
     db.prepare("DELETE FROM users WHERE id = ?").run(userId);
   })();
+}
+
+export interface AdminSessionRow {
+  id: string;
+  user_id: number;
+  username: string;
+  created_at: string;
+  status: string;
+  label: string | null;
+  turn_count: number;
+  final_score: number | null;
+}
+
+const SESSION_SELECT = `
+  SELECT s.id, s.user_id, u.username, s.created_at, s.status, s.label,
+         COUNT(t.id) AS turn_count,
+         json_extract(s.assessment, '$.final_score') AS final_score
+  FROM sessions s
+  JOIN users u ON u.id = s.user_id
+  LEFT JOIN turns t ON t.session_id = s.id
+`;
+
+/**
+ * LEFT JOIN, bukan JOIN seperti `repos/sessions.ts:30`: daftar mahasiswa
+ * menyembunyikan sesi kosong, tapi justru sesi yang mandek tanpa satu giliran
+ * pun yang paling perlu dilihat admin.
+ */
+export function listAllSessions(
+  db: Database.Database,
+  filter: { userId?: number } = {},
+): AdminSessionRow[] {
+  const where = filter.userId ? "WHERE s.user_id = ?" : "";
+  const sql = `${SESSION_SELECT} ${where} GROUP BY s.id ORDER BY s.created_at DESC`;
+  const stmt = db.prepare(sql);
+  return (filter.userId ? stmt.all(filter.userId) : stmt.all()) as AdminSessionRow[];
+}
+
+export function getSessionForAdmin(
+  db: Database.Database,
+  sessionId: string,
+): { session: AdminSessionRow; turns: Turn[]; assessment: unknown } | null {
+  const session = db
+    .prepare(`${SESSION_SELECT} WHERE s.id = ? GROUP BY s.id`)
+    .get(sessionId) as AdminSessionRow | undefined;
+  if (!session) return null;
+  const turns = db
+    .prepare("SELECT role, content FROM turns WHERE session_id = ? ORDER BY turn_number ASC")
+    .all(sessionId) as Turn[];
+  const raw = db.prepare("SELECT assessment FROM sessions WHERE id = ?").get(sessionId) as {
+    assessment: string | null;
+  };
+  return {
+    session,
+    turns,
+    assessment: raw.assessment ? JSON.parse(raw.assessment) : null,
+  };
 }

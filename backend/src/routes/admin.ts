@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
-import { getOverview, listUsers, getUserDetail, deleteUserCompletely } from "../repos/admin.js";
+import { getOverview, listUsers, getUserDetail, deleteUserCompletely, listAllSessions, getSessionForAdmin } from "../repos/admin.js";
 import { getUserById, setAdmin, setSuspended, countAdmins } from "../repos/users.js";
 
 export function adminRouter(
@@ -63,6 +63,18 @@ export function adminRouter(
     }
     deleteUserCompletely(db, id);
     res.json({ ok: true });
+  });
+
+  r.get("/sessions", (req, res) => {
+    const raw = req.query.user_id;
+    const userId = raw === undefined ? undefined : Number(raw);
+    res.json({ sessions: listAllSessions(db, { userId }) });
+  });
+
+  r.get("/sessions/:id", (req, res) => {
+    const found = getSessionForAdmin(db, req.params.id);
+    if (!found) return res.status(404).json({ error: "Sesi tidak ditemukan" });
+    res.json(found);
   });
 
   return r;
