@@ -20,6 +20,7 @@ export function Sessions() {
   }, []);
 
   async function openTranscript(row: AdminSessionRow) {
+    setErr(null);
     try {
       const full = await getAdminSession(row.id);
       setOpen({ row, turns: full.turns });

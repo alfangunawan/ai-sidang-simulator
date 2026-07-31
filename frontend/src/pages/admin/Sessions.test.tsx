@@ -50,4 +50,32 @@ describe("Sessions", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("Sesi tidak ditemukan");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+
+  it("renders a real zero score as 0, not a dash", async () => {
+    vi.spyOn(adminApi, "listAllSessions").mockResolvedValue([
+      { ...ROWS[0], id: "s-3", turn_count: 5, final_score: 0 },
+    ] as any);
+    render(<Sessions />);
+    await screen.findByText("budi");
+    expect(screen.getByText("0")).toBeTruthy();
+  });
+
+  it("clears the error banner once a later transcript fetch succeeds", async () => {
+    vi.spyOn(adminApi, "getAdminSession")
+      .mockRejectedValueOnce(new Error("Sesi tidak ditemukan"))
+      .mockResolvedValueOnce({
+        session: ROWS[0],
+        turns: [{ role: "examiner", content: "Apa rumusan masalahnya?" }],
+        assessment: null,
+      } as any);
+    render(<Sessions />);
+    const btn = await screen.findByRole("button", { name: /Lihat transkrip/ });
+
+    fireEvent.click(btn);
+    expect((await screen.findByRole("alert")).textContent).toBe("Sesi tidak ditemukan");
+
+    fireEvent.click(btn);
+    await screen.findByText("Apa rumusan masalahnya?");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
