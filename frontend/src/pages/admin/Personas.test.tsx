@@ -11,6 +11,18 @@ const ROWS = [
   },
 ];
 
+// Radix selects: options only exist once the trigger is opened, and it opens
+// on pointerdown rather than click (see SettingsPage.test.tsx for the same
+// pattern).
+async function pick(triggerLabel: string, optionName: string | RegExp) {
+  fireEvent.pointerDown(screen.getByLabelText(triggerLabel), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: optionName }));
+}
+
 describe("Personas", () => {
   beforeEach(() => {
     vi.spyOn(adminApi, "listAdminPersonas").mockResolvedValue(ROWS as any);
@@ -74,6 +86,25 @@ describe("Personas", () => {
     await waitFor(() =>
       expect(adminApi.putPersona).toHaveBeenCalledWith(
         expect.objectContaining({ key: "hendra", active: false }),
+      ),
+    );
+  });
+
+  // Free-text mode/type let an admin type an unknown mode (defangs the
+  // examiner, backend.persona.ts falls back silently) or a pair another
+  // persona already holds (personaFor then resolves to the wrong persona).
+  // The picker must only offer the known options.
+  it("offers the known mode and type options instead of free text", async () => {
+    render(<Personas />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ubah hendra/ }));
+
+    await pick("Mode", "Kritis");
+    await pick("Tipe", "Metodolog");
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+    await waitFor(() =>
+      expect(adminApi.putPersona).toHaveBeenCalledWith(
+        expect.objectContaining({ key: "hendra", mode: "kritis", type: "metodolog" }),
       ),
     );
   });

@@ -7,6 +7,7 @@ import { listQuestions, replacePhase } from "../repos/questions.js";
 import { SIDANG_PHASES } from "../phases.js";
 import { listPersonas, upsertPersona, deletePersona } from "../repos/personas.js";
 import type { PersonaRow } from "../personas.js";
+import { EXAMINER_MODES, EXAMINER_TYPES } from "../persona.js";
 
 export function adminRouter(
   db: Database.Database,
@@ -152,6 +153,22 @@ export function adminRouter(
     };
     if (!row.name || !row.initials || !row.mode || !row.type) {
       return res.status(400).json({ error: "Nama, inisial, mode, dan tipe wajib diisi" });
+    }
+    if (!(row.mode in EXAMINER_MODES)) {
+      return res.status(400).json({ error: "Mode tidak dikenal" });
+    }
+    if (!(row.type in EXAMINER_TYPES)) {
+      return res.status(400).json({ error: "Tipe tidak dikenal" });
+    }
+    // personaFor (frontend) membaca persona lewat pasangan mode+type, bukan key —
+    // dua persona dengan pasangan sama membuat yang satu tidak pernah terbaca
+    // balik dan header sidang menampilkan nama yang salah. Cek termasuk yang
+    // nonaktif: persona nonaktif masih menempati pasangannya dan bisa diaktifkan lagi.
+    const clash = listPersonas(db, { includeInactive: true }).find(
+      (p) => p.key !== row.key && p.mode === row.mode && p.type === row.type,
+    );
+    if (clash) {
+      return res.status(400).json({ error: "Pasangan mode dan tipe ini sudah dipakai persona lain" });
     }
     if (!row.active && isLastActive(row.key)) {
       return res.status(400).json({ error: "Persona aktif terakhir tidak bisa dinonaktifkan" });

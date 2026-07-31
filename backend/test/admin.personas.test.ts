@@ -116,4 +116,77 @@ describe("/admin/personas", () => {
     const p = PERSONA_SEED[0];
     await admin.agent.put(`/admin/personas/${p.key}`).send({ ...p, active: "false" }).expect(400);
   });
+
+  // personaFor mencari persona lewat pasangan mode+type, bukan key. Dua
+  // persona dengan pasangan sama membuat find() mengembalikan yang salah —
+  // header sidang bisa menampilkan nama penguji yang keliru sepanjang sitting.
+  it("rejects an unknown examiner mode", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    const p = PERSONA_SEED[0];
+    const { body } = await admin.agent
+      .put(`/admin/personas/${p.key}`)
+      .send({ ...p, mode: "brutal" })
+      .expect(400);
+    expect(body.error).toBe("Mode tidak dikenal");
+  });
+
+  it("rejects an unknown examiner type", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    const p = PERSONA_SEED[0];
+    const { body } = await admin.agent
+      .put(`/admin/personas/${p.key}`)
+      .send({ ...p, type: "misterius" })
+      .expect(400);
+    expect(body.error).toBe("Tipe tidak dikenal");
+  });
+
+  it("rejects a (mode, type) pair already held by a different key", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    const siti = PERSONA_SEED.find((p) => p.key === "siti")!; // mode: kritis, type: umum
+    const { body } = await admin.agent
+      .put("/admin/personas/zaki")
+      .send({
+        key: "zaki", name: "Dr. Zaki", initials: "DZ", role: "Penguji tamu",
+        mode: siti.mode, type: siti.type, color: "#123456", trait: "", position: 99, active: true,
+      })
+      .expect(400);
+    expect(body.error).toBe("Pasangan mode dan tipe ini sudah dipakai persona lain");
+  });
+
+  it("still allows re-saving a persona with its own existing pair", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    const siti = PERSONA_SEED.find((p) => p.key === "siti")!;
+    await admin.agent
+      .put(`/admin/personas/${siti.key}`)
+      .send({ ...siti, trait: "Diperbarui." })
+      .expect(200);
+    const list = (await admin.agent.get("/admin/personas")).body.personas;
+    expect(list.find((p: any) => p.key === siti.key).trait).toBe("Diperbarui.");
+  });
+
+  it("treats a pair held by an inactive persona as still taken", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    const siti = PERSONA_SEED.find((p) => p.key === "siti")!;
+    // Deactivate siti — she still occupies (kritis, umum) and can be reactivated later.
+    await admin.agent.put(`/admin/personas/${siti.key}`).send({ ...siti, active: false }).expect(200);
+
+    const { body } = await admin.agent
+      .put("/admin/personas/zaki")
+      .send({
+        key: "zaki", name: "Dr. Zaki", initials: "DZ", role: "Penguji tamu",
+        mode: siti.mode, type: siti.type, color: "#123456", trait: "", position: 99, active: true,
+      })
+      .expect(400);
+    expect(body.error).toBe("Pasangan mode dan tipe ini sudah dipakai persona lain");
+  });
 });

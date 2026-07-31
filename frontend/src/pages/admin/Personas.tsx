@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   listAdminPersonas, putPersona, deletePersona, type AdminPersonaRow,
 } from "../../adminApi.js";
+import { MODE_LABELS, TYPE_LABELS } from "../../personas.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -45,7 +49,7 @@ export function Personas() {
   }
 
   if (err && !rows) return <p role="alert" className="text-sm text-destructive">{err}</p>;
-  if (!rows) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  if (!rows) return <p className="text-sm text-muted-foreground" aria-live="polite">Memuat…</p>;
 
   function openNew() {
     setEdit({ ...BLANK, position: rows!.length });
@@ -121,9 +125,6 @@ export function Personas() {
                   ["name", "Nama"],
                   ["initials", "Inisial"],
                   ["role", "Peran"],
-                  ["mode", "Mode"],
-                  ["type", "Tipe"],
-                  ["color", "Warna"],
                 ] as const
               ).map(([field, label]) => (
                 <div key={field}>
@@ -140,6 +141,49 @@ export function Personas() {
                   />
                 </div>
               ))}
+              {/* mode dan type dibatasi ke opsi yang backend kenal (Select, bukan
+                  teks bebas) — pasangan keduanya harus tetap unik di antar
+                  persona supaya personaFor bisa membaca persona balik dari
+                  pasangan tersimpan; lihat frontend/src/personas.ts. */}
+              <div>
+                <Label htmlFor="p-mode">Mode</Label>
+                <Select value={edit.mode} onValueChange={(v) => setEdit({ ...edit, mode: v })}>
+                  <SelectTrigger id="p-mode" aria-label="Mode" className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(MODE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="p-type">Tipe</Label>
+                <Select value={edit.type} onValueChange={(v) => setEdit({ ...edit, type: v })}>
+                  <SelectTrigger id="p-type" aria-label="Tipe" className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="p-color">Warna</Label>
+                <Input
+                  id="p-color"
+                  className="mt-1"
+                  value={edit.color}
+                  onChange={(e) => setEdit({ ...edit, color: e.target.value })}
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="p-active"
