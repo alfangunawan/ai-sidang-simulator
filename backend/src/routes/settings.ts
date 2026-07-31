@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
+import type * as express from "express";
 import {
   getSettingsView,
   saveSettings,
@@ -47,7 +48,7 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
     });
   });
 
-  r.post("/", (req, res) => {
+  const handleSettingsSave = (req: express.Request, res: express.Response) => {
     const userId = req.userId!;
     const body = req.body ?? {};
     const fields = [
@@ -77,7 +78,10 @@ export function settingsRouter(db: Database.Database, key: Buffer): Router {
     }
     saveSettings(db, userId, key, body);
     res.json(getSettingsView(db, userId));
-  });
+  };
+
+  r.post("/", handleSettingsSave);
+  r.put("/", handleSettingsSave);
 
   r.get("/usage", (req, res) => {
     const userId = req.userId!;

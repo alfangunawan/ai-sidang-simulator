@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { getSettingsView } from "./settings.js";
 
 export interface AdminOverview {
   users: number;
@@ -70,5 +71,75 @@ export function getOverview(db: Database.Database, todayIso: string): AdminOverv
     tokens: totals.tokens,
     top_spenders,
     signups,
+  };
+}
+
+export interface AdminUserRow {
+  id: number;
+  username: string;
+  created_at: string;
+  suspended: boolean;
+  is_admin: boolean;
+  sessions: number;
+  documents: number;
+  cost_usd: number;
+  tokens: number;
+  key_owner: string | null;
+}
+
+export function listUsers(db: Database.Database): AdminUserRow[] {
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.username, u.created_at, u.suspended, u.is_admin,
+              (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions,
+              (SELECT COUNT(*) FROM documents d WHERE d.user_id = u.id) AS documents,
+              (SELECT COALESCE(SUM(cost_usd), 0) FROM usage_events e WHERE e.user_id = u.id) AS cost_usd,
+              (SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM usage_events e WHERE e.user_id = u.id) AS tokens,
+              (SELECT h.username
+                 FROM collaboration_members m
+                 JOIN collaborations c ON c.id = m.collaboration_id
+                 JOIN users h ON h.id = c.host_user_id
+                WHERE m.member_user_id = u.id LIMIT 1) AS key_owner
+       FROM users u
+       ORDER BY u.created_at DESC`,
+    )
+    .all() as (Omit<AdminUserRow, "suspended" | "is_admin"> & {
+    suspended: number;
+    is_admin: number;
+  })[];
+  return rows.map((r) => ({ ...r, suspended: r.suspended === 1, is_admin: r.is_admin === 1 }));
+}
+
+export interface AdminUserDetail {
+  user: AdminUserRow;
+  settings: ReturnType<typeof getSettingsView>;
+  sessions: { id: string; created_at: string; status: string; turn_count: number }[];
+  documents: { id: number; filename: string; char_count: number; dossier_status: string | null }[];
+}
+
+export function getUserDetail(
+  db: Database.Database,
+  userId: number,
+): AdminUserDetail | null {
+  const user = listUsers(db).find((u) => u.id === userId);
+  if (!user) return null;
+  return {
+    user,
+    // Sengaja memakai getSettingsView yang sudah ada: ia hanya melaporkan
+    // has_*_key sebagai boolean dan tidak pernah mendekripsi apa pun.
+    settings: getSettingsView(db, userId),
+    sessions: db
+      .prepare(
+        `SELECT s.id, s.created_at, s.status, COUNT(t.id) AS turn_count
+         FROM sessions s LEFT JOIN turns t ON t.session_id = s.id
+         WHERE s.user_id = ?
+         GROUP BY s.id ORDER BY s.created_at DESC`,
+      )
+      .all(userId) as AdminUserDetail["sessions"],
+    documents: db
+      .prepare(
+        "SELECT id, filename, char_count, dossier_status FROM documents WHERE user_id = ? ORDER BY id DESC",
+      )
+      .all(userId) as AdminUserDetail["documents"],
   };
 }
