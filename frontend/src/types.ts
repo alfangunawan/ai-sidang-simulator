@@ -155,3 +155,13 @@ export interface AdminUserRow {
   tokens: number;
   key_owner: string | null;
 }
+export interface AdminSessionRow {
+  id: string;
+  user_id: number;
+  username: string;
+  created_at: string;
+  status: string;
+  label: string | null;
+  turn_count: number;
+  final_score: number | null;
+}
