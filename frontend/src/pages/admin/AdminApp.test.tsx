@@ -20,12 +20,15 @@ const OVERVIEW = {
 describe("AdminApp", () => {
   beforeEach(() => {
     vi.spyOn(adminApi, "getOverview").mockResolvedValue(OVERVIEW as any);
+    vi.spyOn(adminApi, "listAllSessions").mockResolvedValue([]);
   });
   afterEach(() => vi.restoreAllMocks());
 
   it("renders the section nav and the overview counters", async () => {
     render(<AdminApp user={{ id: 1, username: "alfan", is_admin: true }} />);
-    expect(await screen.findByText("12")).toBeTruthy();
+    // Token, bukan jumlah pengguna: angka pengguna juga muncul sebagai hitungan
+    // di samping menu, jadi "12" tidak lagi menunjuk satu elemen.
+    expect(await screen.findByText("4.000")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Pengguna" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Ringkasan" })).toBeTruthy();
   });

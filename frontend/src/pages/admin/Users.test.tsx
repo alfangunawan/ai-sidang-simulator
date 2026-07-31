@@ -37,6 +37,17 @@ const DETAIL = {
   ],
 };
 
+// Aksi merusak hidup di balik menu kebab: Radix membukanya pada pointerdown,
+// bukan click (pola yang sama dipakai Select, lihat test-setup.ts).
+async function openMenu(username: string) {
+  fireEvent.pointerDown(screen.getByRole("button", { name: `Aksi lain untuk ${username}` }), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  });
+  await screen.findByRole("menu");
+}
+
 describe("Users", () => {
   beforeEach(() => {
     vi.spyOn(adminApi, "listUsers").mockResolvedValue(ROWS as any);
@@ -54,7 +65,8 @@ describe("Users", () => {
   it("suspends a user", async () => {
     render(<Users selfId={1} />);
     await screen.findByText("budi");
-    fireEvent.click(screen.getByRole("button", { name: "Tangguhkan budi" }));
+    await openMenu("budi");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Tangguhkan budi" }));
     await waitFor(() =>
       expect(adminApi.patchUser).toHaveBeenCalledWith(2, { suspended: true }),
     );
@@ -65,7 +77,8 @@ describe("Users", () => {
   it("requires the username to be typed before deleting", async () => {
     render(<Users selfId={1} />);
     await screen.findByText("budi");
-    fireEvent.click(screen.getByRole("button", { name: "Hapus budi" }));
+    await openMenu("budi");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Hapus budi" }));
 
     const confirm = await screen.findByRole("button", { name: "Hapus permanen" });
     expect(confirm.hasAttribute("disabled")).toBe(true);
@@ -81,8 +94,9 @@ describe("Users", () => {
   it("offers no destructive action against yourself", async () => {
     render(<Users selfId={1} />);
     await screen.findByText("alfan");
-    expect(screen.queryByRole("button", { name: "Hapus alfan" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Tangguhkan alfan" })).toBeNull();
+    // Menunya sendiri tidak ada, jadi tidak ada jalan menuju aksi merusaknya.
+    expect(screen.queryByRole("button", { name: "Aksi lain untuk alfan" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Aksi lain untuk budi" })).toBeTruthy();
   });
 
   it("opens the detail dialog by id and shows sessions, documents, and key presence as booleans only", async () => {

@@ -1,30 +1,37 @@
 import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import {
   listAdminPersonas, putPersona, deletePersona, type AdminPersonaRow,
 } from "../../adminApi.js";
 import { MODE_LABELS, TYPE_LABELS } from "../../personas.js";
+import { Alert, Avatar, Loading, PageHead, Panel } from "./ui.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 const BLANK: AdminPersonaRow = {
   key: "", name: "", initials: "", role: "", mode: "standar", type: "umum",
   color: "#475569", trait: "", position: 0, active: true,
 };
 
-export function Personas() {
+// Mode itu tekanan, bukan kategori: warnanya naik dari tenang ke galak.
+const MODE_TONE: Record<string, string> = {
+  santai: "bg-success/10 text-success",
+  standar: "bg-secondary text-muted-foreground",
+  kritis: "bg-warning/15 text-warning",
+  galak: "bg-destructive/10 text-destructive",
+};
+
+export function Personas({ onCount }: { onCount?: (n: number) => void }) {
   const [rows, setRows] = useState<AdminPersonaRow[] | null>(null);
   const [edit, setEdit] = useState<AdminPersonaRow | null>(null);
   // Kunci hanya boleh diisi saat membuat persona baru: PUT mengirim ke
@@ -34,7 +41,12 @@ export function Personas() {
   const [err, setErr] = useState<string | null>(null);
 
   function reload() {
-    listAdminPersonas().then(setRows).catch((e) => setErr((e as Error).message));
+    listAdminPersonas()
+      .then((r) => {
+        setRows(r);
+        onCount?.(r.length);
+      })
+      .catch((e) => setErr((e as Error).message));
   }
   useEffect(reload, []);
 
@@ -48,8 +60,8 @@ export function Personas() {
     }
   }
 
-  if (err && !rows) return <p role="alert" className="text-sm text-destructive">{err}</p>;
-  if (!rows) return <p className="text-sm text-muted-foreground" aria-live="polite">Memuat…</p>;
+  if (err && !rows) return <Alert>{err}</Alert>;
+  if (!rows) return <Loading />;
 
   function openNew() {
     setEdit({ ...BLANK, position: rows!.length });
@@ -61,55 +73,92 @@ export function Personas() {
   }
 
   return (
-    <div className="space-y-4">
-      {err && <p role="alert" className="text-sm text-destructive">{err}</p>}
-      <Button size="sm" onClick={openNew}>
-        Persona baru
-      </Button>
+    <div className="flex flex-col gap-[18px]">
+      <PageHead
+        title="Persona penguji"
+        sub={`${rows.length} persona · ${rows.filter((p) => p.active).length} aktif dipakai penguji`}
+      >
+        <Button className="h-[38px] rounded-[10px]" onClick={openNew}>
+          <Plus />
+          Persona baru
+        </Button>
+      </PageHead>
 
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nama</TableHead>
-              <TableHead>Mode</TableHead>
-              <TableHead>Tipe</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((p) => (
-              <TableRow key={p.key} className={!p.active ? "opacity-60" : undefined}>
-                <TableCell>
-                  <span className="font-medium">{p.name}</span>
-                  <span className="block text-xs text-muted-foreground">{p.role}</span>
-                </TableCell>
-                <TableCell>{p.mode}</TableCell>
-                <TableCell>{p.type}</TableCell>
-                <TableCell>
-                  <Badge variant={p.active ? "secondary" : "outline"}>
-                    {p.active ? "Aktif" : "Nonaktif"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="xs" onClick={() => openEdit(p)}>
-                      Ubah {p.key}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="xs"
-                      onClick={() => act(() => deletePersona(p.key))}
-                    >
-                      Hapus {p.key}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      {err && <Alert>{err}</Alert>}
+
+      <div className="grid gap-3.5 xl:grid-cols-2">
+        {rows.map((p) => (
+          <Panel key={p.key} className="flex flex-col gap-4 p-5">
+            <div className="flex items-start gap-3">
+              <Avatar
+                className="size-[42px] rounded-[13px] text-sm"
+                style={{ color: p.color, backgroundColor: `${p.color}1A` }}
+              >
+                {p.initials || p.name.slice(0, 2).toUpperCase()}
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm leading-snug font-bold tracking-tight">{p.name}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{p.role}</div>
+              </div>
+              <button
+                role="switch"
+                aria-checked={p.active}
+                aria-label={`${p.active ? "Nonaktifkan" : "Aktifkan"} ${p.key}`}
+                onClick={() => act(() => putPersona({ ...p, active: !p.active }))}
+                className={cn(
+                  "flex h-[26px] flex-none items-center gap-1.5 rounded-full py-0 pr-1 pl-2.5 transition-colors",
+                  p.active ? "bg-primary" : "bg-secondary",
+                )}
+              >
+                <span
+                  className={cn(
+                    "text-[11px] font-bold",
+                    p.active ? "text-primary-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {p.active ? "Aktif" : "Nonaktif"}
+                </span>
+                <span className="size-[18px] rounded-full bg-card shadow-sm" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold",
+                  MODE_TONE[p.mode] ?? MODE_TONE.standar,
+                )}
+              >
+                <span className="size-1.5 rounded-full bg-current" />
+                {MODE_LABELS[p.mode] ?? p.mode}
+              </span>
+              <span className="rounded-full bg-secondary px-2.5 py-1 text-[11.5px] font-bold text-muted-foreground">
+                {TYPE_LABELS[p.type] ?? p.type}
+              </span>
+            </div>
+
+            <div className="flex gap-2 border-t pt-3.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-[9px] text-xs"
+                aria-label={`Ubah ${p.key}`}
+                onClick={() => openEdit(p)}
+              >
+                Ubah persona
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-8 rounded-[9px] border-destructive/25 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                aria-label={`Hapus ${p.key}`}
+                onClick={() => act(() => deletePersona(p.key))}
+              >
+                Hapus
+              </Button>
+            </div>
+          </Panel>
+        ))}
       </div>
 
       <Dialog open={edit !== null} onOpenChange={(next) => !next && setEdit(null)}>

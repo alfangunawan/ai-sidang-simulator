@@ -30,6 +30,7 @@ describe("Overview signup chart", () => {
       { day: "2026-07-20", count: 10 },
     ];
     vi.spyOn(adminApi, "getOverview").mockResolvedValue(baseOverview(signups) as any);
+    vi.spyOn(adminApi, "listAllSessions").mockResolvedValue([]);
     render(<Overview />);
 
     await screen.findByText("12");
@@ -46,6 +47,7 @@ describe("Overview signup chart", () => {
       count: 0,
     }));
     vi.spyOn(adminApi, "getOverview").mockResolvedValue(baseOverview(signups) as any);
+    vi.spyOn(adminApi, "listAllSessions").mockResolvedValue([]);
     render(<Overview />);
 
     await screen.findByText("12");
