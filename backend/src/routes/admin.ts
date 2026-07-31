@@ -3,6 +3,8 @@ import type Database from "better-sqlite3";
 import { getOverview, listUsers, getUserDetail, deleteUserCompletely, listAllSessions, getSessionForAdmin, listAllCodes } from "../repos/admin.js";
 import { getUserById, setAdmin, setSuspended, countAdmins } from "../repos/users.js";
 import { kickMember } from "../repos/collab.js";
+import { listQuestions, replacePhase } from "../repos/questions.js";
+import { SIDANG_PHASES } from "../phases.js";
 
 export function adminRouter(
   db: Database.Database,
@@ -95,6 +97,25 @@ export function adminRouter(
       return res.status(400).json({ error: "memberId harus berupa angka positif" });
     }
     kickMember(db, Number(hostId), Number(memberId));
+    res.json({ ok: true });
+  });
+
+  r.get("/questions", (_req, res) => {
+    res.json({ phases: SIDANG_PHASES, bank: listQuestions(db) });
+  });
+
+  r.put("/questions", (req, res) => {
+    const phase = String(req.body?.phase ?? "");
+    const texts = req.body?.texts;
+    // Fase divalidasi terhadap agenda: baris bebas boleh, nama fase tidak —
+    // fase asing tidak akan pernah terbaca dan hanya jadi sampah diam-diam.
+    if (!SIDANG_PHASES.includes(phase)) {
+      return res.status(400).json({ error: "Fase tidak dikenal" });
+    }
+    if (!Array.isArray(texts) || texts.some((t) => typeof t !== "string")) {
+      return res.status(400).json({ error: "Daftar pertanyaan harus berupa teks" });
+    }
+    replacePhase(db, phase, texts);
     res.json({ ok: true });
   });
 

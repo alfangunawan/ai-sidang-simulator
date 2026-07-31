@@ -53,3 +53,20 @@ export async function kickMember(hostId: number, memberId: number): Promise<void
     await fetch(`/api/admin/codes/${hostId}/members/${memberId}`, { method: "DELETE" }),
   );
 }
+
+export async function getQuestions(): Promise<{
+  phases: string[];
+  bank: Record<string, string[]>;
+}> {
+  return jsonOrThrow(await fetch("/api/admin/questions"));
+}
+
+export async function putQuestions(phase: string, texts: string[]): Promise<void> {
+  await jsonOrThrow(
+    await fetch("/api/admin/questions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase, texts }),
+    }),
+  );
+}
