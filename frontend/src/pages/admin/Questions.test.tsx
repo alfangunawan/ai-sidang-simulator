@@ -24,4 +24,21 @@ describe("Questions", () => {
       expect(adminApi.putQuestions).toHaveBeenCalledWith("Pembukaan", ["Satu?", "Tiga?"]),
     );
   });
+
+  it("normalises the textarea to what was actually saved, and clears the saved flag on edit", async () => {
+    render(<Questions />);
+    const box = (await screen.findByLabelText("Pembukaan")) as HTMLTextAreaElement;
+
+    fireEvent.change(box, { target: { value: "  Satu?  \n\nDua?\n" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan Pembukaan" }));
+    await waitFor(() =>
+      expect(adminApi.putQuestions).toHaveBeenCalledWith("Pembukaan", ["Satu?", "Dua?"]),
+    );
+    // textarea harus menampilkan persis yang tersimpan di server, bukan input mentah
+    expect(box.value).toBe("Satu?\nDua?");
+    expect(screen.getByText("Tersimpan.")).toBeTruthy();
+
+    fireEvent.change(box, { target: { value: "Satu?\nDua?\nTiga?" } });
+    expect(screen.queryByText("Tersimpan.")).toBeNull();
+  });
 });

@@ -24,10 +24,11 @@ export function Questions() {
     setErr(null);
     try {
       // Satu pertanyaan per baris; baris kosong dibuang di server juga.
-      await putQuestions(
-        phase,
-        (draft[phase] ?? "").split("\n").map((s) => s.trim()).filter(Boolean),
-      );
+      const lines = (draft[phase] ?? "").split("\n").map((s) => s.trim()).filter(Boolean);
+      await putQuestions(phase, lines);
+      // Tulis balik hasil yang sudah dinormalisasi supaya textarea tidak
+      // menyimpang dari yang benar-benar tersimpan di server.
+      setDraft((d) => ({ ...d, [phase]: lines.join("\n") }));
       setSaved(phase);
     } catch (e) {
       setErr((e as Error).message);
@@ -52,7 +53,10 @@ export function Questions() {
             id={`phase-${p}`}
             rows={6}
             value={draft[p] ?? ""}
-            onChange={(e) => setDraft((d) => ({ ...d, [p]: e.target.value }))}
+            onChange={(e) => {
+              setDraft((d) => ({ ...d, [p]: e.target.value }));
+              setSaved((s) => (s === p ? null : s));
+            }}
           />
           <div className="flex items-center gap-3">
             <Button size="sm" onClick={() => save(p)}>
