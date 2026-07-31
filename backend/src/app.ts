@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
 import type Database from "better-sqlite3";
-import { authRouter, requireAuth } from "./routes/auth.js";
+import { authRouter, requireAuth, requireAdmin } from "./routes/auth.js";
+import { adminRouter } from "./routes/admin.js";
 import { settingsRouter } from "./routes/settings.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { skripsiRouter } from "./routes/skripsi.js";
@@ -28,6 +29,7 @@ export function buildApp(db: Database.Database, key: Buffer): express.Express {
   app.use("/tts", auth, ttsRouter(db, key));
   app.use("/stt", auth, sttRouter(db, key));
   app.use("/collab", auth, collabRouter(db));
+  app.use("/admin", auth, requireAdmin(db), adminRouter(db));
 
   app.use(
     (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
