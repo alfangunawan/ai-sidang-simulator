@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { seedQuestions } from "./repos/questions.js";
 
 const MIGRATION = `
 CREATE TABLE IF NOT EXISTS sessions (
@@ -97,6 +98,15 @@ CREATE TABLE IF NOT EXISTS collaboration_members (
   FOREIGN KEY (collaboration_id) REFERENCES collaborations(id) ON DELETE CASCADE,
   FOREIGN KEY (member_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS question_bank (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  phase    TEXT NOT NULL,
+  text     TEXT NOT NULL,
+  position INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_question_bank_phase ON question_bank(phase, position);
 `;
 
 function addColumnIfMissing(
@@ -130,5 +140,6 @@ export function openDb(path: string): Database.Database {
   addColumnIfMissing(db, "usage_events", "key_owner_user_id", "key_owner_user_id INTEGER");
   addColumnIfMissing(db, "users", "is_admin", "is_admin INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "users", "suspended", "suspended INTEGER NOT NULL DEFAULT 0");
+  seedQuestions(db);
   return db;
 }

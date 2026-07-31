@@ -8,6 +8,7 @@ import { getActiveDocument, getDossierRow } from "../repos/documents.js";
 import { getChunks } from "../repos/chunks.js";
 import { buildPersona } from "../persona.js";
 import { buildPhaseBlock } from "../questionBank.js";
+import { listQuestions } from "../repos/questions.js";
 import { formatDossier, type Dossier } from "../dossier.js";
 import { retrieve, formatExcerpts, formatChunks } from "../retrieval.js";
 import {
@@ -120,6 +121,7 @@ export function sessionsRouter(
       const phaseBlock = buildPhaseBlock(
         countExaminerTurns(db, sessionId),
         parsedDossier.modul_kritik_terpicu,
+        listQuestions(db),
       );
 
       // Kueri retrieval memakai pertanyaan penguji terakhir DAN jawaban
