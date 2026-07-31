@@ -57,6 +57,24 @@ describe("/auth/me exposes is_admin", () => {
   });
 });
 
+describe("/auth/login exposes is_admin", () => {
+  // /auth/register and /auth/login used to hand-construct { id, username },
+  // so an admin who just signed in and jumped straight to /admin (no reload)
+  // would see is_admin undefined and get bounced. Both routes now return the
+  // same full user row /auth/me does.
+  it("carries is_admin: true in the login response for an admin user", async () => {
+    const { db, app } = ctx();
+    const u = await reg(app, "alfan");
+    setAdmin(db, u.id, 1);
+
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ username: "alfan", password: "password1" })
+      .expect(200);
+    expect(res.body.user).toMatchObject({ id: u.id, username: "alfan", is_admin: true });
+  });
+});
+
 describe("grant-admin script", () => {
   it("promotes an existing user and reports an unknown one", async () => {
     const { db, app } = ctx();

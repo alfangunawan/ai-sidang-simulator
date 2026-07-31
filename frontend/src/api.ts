@@ -36,7 +36,7 @@ export function setUnauthorizedHandler(fn: () => void): void {
   onUnauthorized = fn;
 }
 
-async function jsonOrThrow(res: Response) {
+export async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     if (res.status === 401) onUnauthorized?.();

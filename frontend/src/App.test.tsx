@@ -9,7 +9,7 @@ import * as api from "./api.js";
 describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(api, "me").mockResolvedValue({ id: 1, username: "alfan" });
+    vi.spyOn(api, "me").mockResolvedValue({ id: 1, username: "alfan", is_admin: false });
     vi.spyOn(api, "getSettings").mockRejectedValue(new Error("offline"));
     vi.spyOn(api, "listSessions").mockResolvedValue([]);
     vi.spyOn(api, "getSkripsi").mockResolvedValue(null);

@@ -65,7 +65,7 @@ export function authRouter(
     const userId = createUser(db, username, hashPassword(password), now());
     seedDefaults(db, userId);
     issue(res, req, userId);
-    res.json({ user: { id: userId, username } });
+    res.json({ user: getUserById(db, userId) });
   });
 
   r.post("/login", (req, res) => {
@@ -76,7 +76,7 @@ export function authRouter(
       return res.status(401).json({ error: "Username atau password salah" });
     }
     issue(res, req, user.id);
-    res.json({ user: { id: user.id, username: user.username } });
+    res.json({ user: getUserById(db, user.id) });
   });
 
   r.post("/logout", (req, res) => {

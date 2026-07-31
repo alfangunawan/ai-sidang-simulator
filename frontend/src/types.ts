@@ -1,4 +1,4 @@
-export interface User { id: number; username: string; }
+export interface User { id: number; username: string; is_admin: boolean; }
 export type Role = "examiner" | "user";
 export interface Turn { role: Role; content: string; }
 export interface ExaminerMode {
@@ -132,4 +132,14 @@ export interface Assessment {
   kelebihan: string[];
   kekurangan: string[];
   saran: string[];
+}
+export interface AdminOverview {
+  users: number;
+  sessions: number;
+  documents: number;
+  turns: number;
+  cost_usd: number;
+  tokens: number;
+  top_spenders: { user_id: number; username: string; cost_usd: number; tokens: number }[];
+  signups: { day: string; count: number }[];
 }

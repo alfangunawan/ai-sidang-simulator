@@ -11,6 +11,7 @@ import { HistoryPage } from "./pages/HistoryPage.js";
 import { ResultPage } from "./pages/ResultPage.js";
 import { AuthPage } from "./pages/AuthPage.js";
 import { LandingPage } from "./pages/LandingPage.js";
+import { AdminApp } from "./pages/admin/AdminApp.js";
 import { SetupModal, type MicState } from "./components/SetupModal.js";
 import { SkripsiModal } from "./components/SkripsiModal.js";
 import {
@@ -153,6 +154,17 @@ export default function App() {
     ) : (
       <LandingPage onStart={() => setShowAuth(true)} />
     );
+  }
+
+  // Panel admin punya kerangka sendiri: tab mahasiswa tidak berlaku di sini.
+  // Ditaruh SESUDAH gerbang login supaya pengunjung /admin yang belum masuk
+  // tetap melihat halaman login, bukan lemparan balik yang membingungkan.
+  if (window.location.pathname.startsWith("/admin")) {
+    if (!user.is_admin) {
+      window.location.replace("/");
+      return null;
+    }
+    return <AdminApp user={user} />;
   }
 
   return (
