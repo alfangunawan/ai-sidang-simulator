@@ -60,7 +60,7 @@ describe("GET /admin/users/:id", () => {
     const budi = await reg(app, "budi");
     setAdmin(db, admin.id, 1);
     await budi.agent
-      .put("/settings")
+      .post("/settings")
       .send({ provider: "claude", api_key: "sk-ant-SECRETVALUE" })
       .expect(200);
 

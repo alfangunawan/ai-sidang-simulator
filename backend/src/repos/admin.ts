@@ -99,7 +99,7 @@ export function listUsers(db: Database.Database): AdminUserRow[] {
                  FROM collaboration_members m
                  JOIN collaborations c ON c.id = m.collaboration_id
                  JOIN users h ON h.id = c.host_user_id
-                WHERE m.member_user_id = u.id LIMIT 1) AS key_owner
+                WHERE m.member_user_id = u.id) AS key_owner
        FROM users u
        ORDER BY u.created_at DESC`,
     )
