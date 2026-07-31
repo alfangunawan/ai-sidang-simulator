@@ -59,9 +59,13 @@ export function Overview() {
           <CardTitle className="text-base">Pendaftar 14 hari terakhir</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex h-24 items-end gap-1">
+          <div className="flex h-24 items-stretch gap-1">
             {data.signups.map((s) => (
-              <div key={s.day} className="flex-1" title={`${s.day}: ${s.count}`}>
+              <div
+                key={s.day}
+                className="flex flex-1 flex-col justify-end"
+                title={`${s.day}: ${s.count}`}
+              >
                 <div
                   className="w-full rounded-t bg-primary"
                   style={{ height: `${(s.count / peak) * 100}%` }}
