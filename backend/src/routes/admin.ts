@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import { getOverview, listUsers, getUserDetail } from "../repos/admin.js";
-import { getUserById, setAdmin, setSuspended, countAdmins, isAdmin } from "../repos/users.js";
+import { getUserById, setAdmin, setSuspended, countAdmins } from "../repos/users.js";
 
 export function adminRouter(
   db: Database.Database,
@@ -36,10 +36,17 @@ export function adminRouter(
     const self = id === req.userId;
     const { suspended, is_admin } = req.body ?? {};
 
+    if (suspended !== undefined && typeof suspended !== "boolean") {
+      return res.status(400).json({ error: "Nilai suspended harus boolean" });
+    }
+    if (is_admin !== undefined && typeof is_admin !== "boolean") {
+      return res.status(400).json({ error: "Nilai is_admin harus boolean" });
+    }
+
     if (self && (suspended === true || is_admin === false)) {
       return res.status(400).json({ error: "Tidak bisa menangguhkan atau mencabut diri sendiri" });
     }
-    if (is_admin === false && isAdmin(db, id) && countAdmins(db) <= 1) {
+    if (is_admin === false && target.is_admin && countAdmins(db) <= 1) {
       return res.status(400).json({ error: "Admin terakhir tidak bisa dicabut" });
     }
 

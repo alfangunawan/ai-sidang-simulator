@@ -78,4 +78,47 @@ describe("PATCH /admin/users/:id", () => {
     setAdmin(db, admin.id, 1);
     await admin.agent.patch("/admin/users/9999").send({ suspended: true }).expect(404);
   });
+
+  it("rejects non-boolean is_admin on self", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+
+    const res = await admin.agent.patch(`/admin/users/${admin.id}`).send({ is_admin: 0 }).expect(400);
+    expect(res.body.error).toBeTruthy();
+    expect(isAdmin(db, admin.id)).toBe(true);
+    expect(countAdmins(db)).toBe(1);
+  });
+
+  it("rejects non-boolean suspended on self", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+
+    const res = await admin.agent.patch(`/admin/users/${admin.id}`).send({ suspended: 1 }).expect(400);
+    expect(res.body.error).toBeTruthy();
+    expect(isSuspended(db, admin.id)).toBe(false);
+  });
+
+  it("rejects non-boolean is_admin on another user", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    const budi = await reg(app, "budi");
+    setAdmin(db, admin.id, 1);
+
+    const res = await admin.agent.patch(`/admin/users/${budi.id}`).send({ is_admin: "yes" }).expect(400);
+    expect(res.body.error).toBeTruthy();
+    expect(isAdmin(db, budi.id)).toBe(false);
+  });
+
+  it("rejects non-boolean suspended on another user", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    const budi = await reg(app, "budi");
+    setAdmin(db, admin.id, 1);
+
+    const res = await admin.agent.patch(`/admin/users/${budi.id}`).send({ suspended: null }).expect(400);
+    expect(res.body.error).toBeTruthy();
+    expect(isSuspended(db, budi.id)).toBe(false);
+  });
 });
