@@ -73,13 +73,17 @@ describe("DELETE /admin/users/:id", () => {
     setAdmin(db, admin.id, 1);
     seed(db, budi.id, "budi");
     seed(db, citra.id, "citra");
+    const citraDoc = db
+      .prepare("SELECT id FROM documents WHERE user_id = ? LIMIT 1")
+      .get(citra.id) as { id: number };
 
     await admin.agent.delete(`/admin/users/${budi.id}`).expect(200);
 
     expect(rows(db, "SELECT COUNT(*) c FROM sessions WHERE user_id = ?", citra.id)).toBe(1);
     expect(rows(db, "SELECT COUNT(*) c FROM turns WHERE session_id = 's-citra'")).toBe(1);
     expect(rows(db, "SELECT COUNT(*) c FROM documents WHERE user_id = ?", citra.id)).toBe(1);
-    expect(rows(db, "SELECT COUNT(*) c FROM chunks")).toBe(1);
+    expect(rows(db, "SELECT COUNT(*) c FROM chunks WHERE document_id = ?", citraDoc.id)).toBe(1);
+    expect(rows(db, "SELECT COUNT(*) c FROM usage_events WHERE user_id = ?", citra.id)).toBe(1);
   });
 
   it("refuses self-deletion and 404s on an unknown user", async () => {
@@ -89,5 +93,32 @@ describe("DELETE /admin/users/:id", () => {
     await admin.agent.delete(`/admin/users/${admin.id}`).expect(400);
     await admin.agent.delete("/admin/users/9999").expect(404);
     expect(rows(db, "SELECT COUNT(*) c FROM users WHERE id = ?", admin.id)).toBe(1);
+  });
+
+  it("preserves usage_events where the deleted user is key_owner_user_id", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    const budi = await reg(app, "budi");
+    const citra = await reg(app, "citra");
+    setAdmin(db, admin.id, 1);
+    // citra is the actor (user_id), budi is the key owner (key_owner_user_id)
+    db.prepare(
+      `INSERT INTO usage_events
+         (user_id, key_owner_user_id, created_at, provider, model, kind,
+          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd)
+       VALUES (?, ?, ?, 'x', 'y', 'turn', 1, 1, 0, 0, 0.5)`,
+    ).run(citra.id, budi.id, "2026-07-30T00:00:00.000Z");
+
+    await admin.agent.delete(`/admin/users/${budi.id}`).expect(200);
+
+    // citra's usage row must survive even though it references deleted budi as key owner
+    expect(
+      rows(
+        db,
+        "SELECT COUNT(*) c FROM usage_events WHERE user_id = ? AND key_owner_user_id = ?",
+        citra.id,
+        budi.id,
+      ),
+    ).toBe(1);
   });
 });
