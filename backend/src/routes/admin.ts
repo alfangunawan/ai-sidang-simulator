@@ -67,6 +67,9 @@ export function adminRouter(
 
   r.get("/sessions", (req, res) => {
     const raw = req.query.user_id;
+    if (raw !== undefined && (typeof raw !== "string" || !/^\d+$/.test(raw))) {
+      return res.status(400).json({ error: "user_id harus berupa angka positif" });
+    }
     const userId = raw === undefined ? undefined : Number(raw);
     res.json({ sessions: listAllSessions(db, { userId }) });
   });

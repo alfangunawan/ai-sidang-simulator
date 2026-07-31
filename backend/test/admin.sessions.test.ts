@@ -38,8 +38,37 @@ describe("GET /admin/sessions", () => {
     expect(body.sessions).toHaveLength(2);
     expect(body.sessions.every((s: any) => s.username === "budi")).toBe(true);
 
+    const sFull = body.sessions.find((s: any) => s.id === "s-full");
+    expect(sFull).toBeDefined();
+    expect(sFull.turn_count).toBe(1);
+
+    const emptySession = body.sessions.find((s: any) => s.turn_count === 0);
+    expect(emptySession).toBeDefined();
+
     const filtered = await admin.agent.get(`/admin/sessions?user_id=${admin.id}`).expect(200);
     expect(filtered.body.sessions).toHaveLength(0);
+  });
+
+  it("rejects invalid user_id parameters with 400", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    const budi = await reg(app, "budi");
+    setAdmin(db, admin.id, 1);
+
+    await budi.agent.post("/sessions").send({}).expect(200);
+
+    // Non-numeric user_id
+    await admin.agent.get("/admin/sessions?user_id=abc").expect(400);
+
+    // Empty user_id
+    await admin.agent.get("/admin/sessions?user_id=").expect(400);
+
+    // Multiple user_id parameters (Express parses as array)
+    await admin.agent.get("/admin/sessions?user_id=1&user_id=2").expect(400);
+
+    // Verify that the unfiltered list was not returned
+    const allSessions = await admin.agent.get("/admin/sessions").expect(200);
+    expect(allSessions.body.sessions).toHaveLength(1);
   });
 });
 
