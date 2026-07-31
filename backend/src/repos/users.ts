@@ -78,3 +78,14 @@ export function countAdmins(db: Database.Database): number {
   };
   return row.c;
 }
+
+export function isSuspended(db: Database.Database, userId: number): boolean {
+  const row = db.prepare("SELECT suspended FROM users WHERE id = ?").get(userId) as
+    | { suspended: number }
+    | undefined;
+  return row?.suspended === 1;
+}
+
+export function setSuspended(db: Database.Database, userId: number, value: 0 | 1): void {
+  db.prepare("UPDATE users SET suspended = ? WHERE id = ?").run(value, userId);
+}
