@@ -125,8 +125,18 @@ export function adminRouter(
     res.json({ personas: listPersonas(db, { includeInactive: true }) });
   });
 
+  // Menghapus dan menonaktifkan bisa sama-sama mengosongkan picker mahasiswa,
+  // jadi keduanya lewat penjagaan yang sama: persona aktif terakhir bertahan.
+  function isLastActive(key: string): boolean {
+    const active = listPersonas(db);
+    return active.length <= 1 && active.some((p) => p.key === key);
+  }
+
   r.put("/personas/:key", (req, res) => {
     const b = req.body ?? {};
+    if (b.active !== undefined && typeof b.active !== "boolean") {
+      return res.status(400).json({ error: "Nilai active harus boolean" });
+    }
     const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
     const row: PersonaRow = {
       key: req.params.key,
@@ -143,14 +153,16 @@ export function adminRouter(
     if (!row.name || !row.initials || !row.mode || !row.type) {
       return res.status(400).json({ error: "Nama, inisial, mode, dan tipe wajib diisi" });
     }
+    if (!row.active && isLastActive(row.key)) {
+      return res.status(400).json({ error: "Persona aktif terakhir tidak bisa dinonaktifkan" });
+    }
     upsertPersona(db, row);
     res.json({ ok: true });
   });
 
   r.delete("/personas/:key", (req, res) => {
     // Picker mahasiswa tidak boleh berakhir kosong.
-    const active = listPersonas(db);
-    if (active.length <= 1 && active.some((p) => p.key === req.params.key)) {
+    if (isLastActive(req.params.key)) {
       return res.status(400).json({ error: "Persona terakhir tidak bisa dihapus" });
     }
     deletePersona(db, req.params.key);

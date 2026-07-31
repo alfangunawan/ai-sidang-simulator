@@ -5,6 +5,7 @@ import { openDb } from "../src/db.js";
 import { buildApp } from "../src/app.js";
 import { setAdmin } from "../src/repos/users.js";
 import { PERSONA_SEED } from "../src/personas.js";
+import { listPersonas } from "../src/repos/personas.js";
 
 function ctx() {
   const db = openDb(":memory:");
@@ -82,5 +83,37 @@ describe("/admin/personas", () => {
     const { app } = ctx();
     const budi = await reg(app, "budi");
     await budi.agent.get("/admin/personas").expect(403);
+  });
+
+  // PUT can empty the picker just as surely as DELETE — deactivating the
+  // last active persona must hit the same guard.
+  it("refuses to deactivate the last active persona via PUT", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    for (const p of PERSONA_SEED.slice(1)) {
+      await admin.agent.put(`/admin/personas/${p.key}`).send({ ...p, active: false }).expect(200);
+    }
+    const last = PERSONA_SEED[0];
+    await admin.agent.put(`/admin/personas/${last.key}`).send({ ...last, active: false }).expect(400);
+    expect(listPersonas(db)).toEqual([expect.objectContaining({ key: last.key })]);
+  });
+
+  it("allows deactivating a persona while others remain active", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    const p = PERSONA_SEED[1];
+    await admin.agent.put(`/admin/personas/${p.key}`).send({ ...p, active: false }).expect(200);
+    expect(listPersonas(db).some((x) => x.key === p.key)).toBe(false);
+    expect(listPersonas(db).length).toBe(PERSONA_SEED.length - 1);
+  });
+
+  it("rejects a non-boolean active value instead of coercing it truthy", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    const p = PERSONA_SEED[0];
+    await admin.agent.put(`/admin/personas/${p.key}`).send({ ...p, active: "false" }).expect(400);
   });
 });
