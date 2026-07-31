@@ -165,3 +165,14 @@ export interface AdminSessionRow {
   turn_count: number;
   final_score: number | null;
 }
+export interface AdminCodeRow {
+  id: number;
+  host_user_id: number;
+  host_username: string;
+  invite_code: string;
+  created_at: string;
+  shares: { share_ai: number; share_tts: number; share_stt: number };
+  members: { member_user_id: number; username: string; joined_at: string }[];
+  cost_usd: number;
+  calls: number;
+}

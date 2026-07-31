@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Overview } from "./Overview.js";
 import { Users } from "./Users.js";
 import { Sessions } from "./Sessions.js";
+import { Codes } from "./Codes.js";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { User } from "../../types.js";
@@ -63,7 +64,8 @@ export function AdminApp({ user }: { user: User }) {
           {section === "ringkasan" && <Overview />}
           {section === "pengguna" && <Users selfId={user.id} />}
           {section === "sesi" && <Sessions />}
-          {!["ringkasan", "pengguna", "sesi"].includes(section) && (
+          {section === "kode" && <Codes />}
+          {!["ringkasan", "pengguna", "sesi", "kode"].includes(section) && (
             <p className="text-sm text-muted-foreground">Bagian ini belum dibuat.</p>
           )}
         </main>

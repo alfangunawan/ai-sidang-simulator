@@ -1,5 +1,12 @@
 import { jsonOrThrow } from "./api.js";
-import type { AdminOverview, AdminUserRow, AdminSessionRow, Turn, Assessment } from "./types.js";
+import type {
+  AdminOverview,
+  AdminUserRow,
+  AdminSessionRow,
+  AdminCodeRow,
+  Turn,
+  Assessment,
+} from "./types.js";
 
 export async function getOverview(): Promise<AdminOverview> {
   return jsonOrThrow(await fetch("/api/admin/overview"));
@@ -35,4 +42,14 @@ export async function getAdminSession(
   id: string,
 ): Promise<{ session: AdminSessionRow; turns: Turn[]; assessment: Assessment | null }> {
   return jsonOrThrow(await fetch(`/api/admin/sessions/${id}`));
+}
+
+export async function listCodes(): Promise<AdminCodeRow[]> {
+  return (await jsonOrThrow(await fetch("/api/admin/codes"))).codes;
+}
+
+export async function kickMember(hostId: number, memberId: number): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/admin/codes/${hostId}/members/${memberId}`, { method: "DELETE" }),
+  );
 }
