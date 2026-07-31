@@ -10,7 +10,7 @@ describe("users repo", () => {
     const db = openDb(":memory:");
     const id = createUser(db, "alfan", "salt:hash", "2026-07-27T00:00:00.000Z");
     expect(getUserByUsername(db, "alfan")).toMatchObject({ id, username: "alfan", password_hash: "salt:hash" });
-    expect(getUserById(db, id)).toEqual({ id, username: "alfan" });
+    expect(getUserById(db, id)).toEqual({ id, username: "alfan", is_admin: false });
     expect(getUserByUsername(db, "nobody")).toBeNull();
   });
 

@@ -6,7 +6,7 @@ import {
 } from "../auth.js";
 import {
   createUser, getUserByUsername, getUserById,
-  createToken, getUserIdByToken, deleteToken,
+  createToken, getUserIdByToken, deleteToken, isAdmin,
 } from "../repos/users.js";
 import { seedDefaults } from "../repos/settings.js";
 
@@ -21,6 +21,18 @@ export function requireAuth(
     const userId = token ? getUserIdByToken(db, token, now()) : null;
     if (!userId) return res.status(401).json({ error: "Silakan login" });
     req.userId = userId;
+    next();
+  };
+}
+
+/**
+ * Pasang SESUDAH requireAuth. Gerbangnya membaca kolom `users.is_admin` lewat
+ * `req.userId` — terikat ke id, bukan username, supaya ganti username tidak
+ * diam-diam mencabut atau memindahkan hak admin.
+ */
+export function requireAdmin(db: Database.Database): RequestHandler {
+  return (req, res, next) => {
+    if (!isAdmin(db, req.userId!)) return res.status(403).json({ error: "Khusus admin" });
     next();
   };
 }

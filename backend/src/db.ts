@@ -128,5 +128,6 @@ export function openDb(path: string): Database.Database {
   addColumnIfMissing(db, "documents", "dossier_model", "dossier_model TEXT");
   addColumnIfMissing(db, "usage_events", "user_id", "user_id INTEGER");
   addColumnIfMissing(db, "usage_events", "key_owner_user_id", "key_owner_user_id INTEGER");
+  addColumnIfMissing(db, "users", "is_admin", "is_admin INTEGER NOT NULL DEFAULT 0");
   return db;
 }
