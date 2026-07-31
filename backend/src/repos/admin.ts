@@ -143,3 +143,28 @@ export function getUserDetail(
       .all(userId) as AdminUserDetail["documents"],
   };
 }
+
+/**
+ * `users` sudah cascade ke auth_tokens, user_settings, collaborations, dan
+ * collaboration_members. TAPI sessions/documents/usage_events memakai kolom
+ * user_id yang ditambahkan lewat ALTER TABLE — SQLite tidak bisa memasang
+ * foreign key di sana, jadi tanpa hapus manual di bawah, setiap transkrip dan
+ * naskah milik pengguna itu menggantung di DB selamanya.
+ *
+ * usage_events milik ORANG LAIN yang memakai key pengguna ini (key_owner_user_id)
+ * sengaja dibiarkan: riwayat pengeluaran host harus selamat dari penghapusan member.
+ */
+export function deleteUserCompletely(db: Database.Database, userId: number): void {
+  db.transaction(() => {
+    db.prepare(
+      "DELETE FROM turns WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?)",
+    ).run(userId);
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    db.prepare(
+      "DELETE FROM chunks WHERE document_id IN (SELECT id FROM documents WHERE user_id = ?)",
+    ).run(userId);
+    db.prepare("DELETE FROM documents WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM usage_events WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  })();
+}

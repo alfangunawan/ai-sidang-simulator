@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
-import { getOverview, listUsers, getUserDetail } from "../repos/admin.js";
+import { getOverview, listUsers, getUserDetail, deleteUserCompletely } from "../repos/admin.js";
 import { getUserById, setAdmin, setSuspended, countAdmins } from "../repos/users.js";
 
 export function adminRouter(
@@ -52,6 +52,16 @@ export function adminRouter(
 
     if (suspended !== undefined) setSuspended(db, id, suspended ? 1 : 0);
     if (is_admin !== undefined) setAdmin(db, id, is_admin ? 1 : 0);
+    res.json({ ok: true });
+  });
+
+  r.delete("/users/:id", (req, res) => {
+    const id = Number(req.params.id);
+    if (!getUserById(db, id)) return res.status(404).json({ error: "Pengguna tidak ditemukan" });
+    if (id === req.userId) {
+      return res.status(400).json({ error: "Tidak bisa menghapus diri sendiri" });
+    }
+    deleteUserCompletely(db, id);
     res.json({ ok: true });
   });
 
