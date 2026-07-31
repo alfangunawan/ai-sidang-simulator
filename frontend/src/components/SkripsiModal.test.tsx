@@ -77,6 +77,36 @@ describe("SkripsiModal", () => {
     await waitFor(() => expect(screen.getByText("⏳ Menganalisis")).toBeTruthy());
   });
 
+  // Tanpa key sama sekali, "perbaiki di Pengaturan" adalah jalan buntu bagi
+  // penerima kode early access — kodenya harus bisa dipakai dari sini juga.
+  it("takes an early access code from the failure and re-reads the naskah with it", async () => {
+    vi.spyOn(api, "getSkripsi").mockResolvedValue({
+      ...UPLOADED,
+      dossier_status: "failed",
+      dossier_error: "Pembacaan naskah oleh model gagal: API key belum diset",
+    });
+    vi.spyOn(api, "getDossier").mockResolvedValue(null);
+    const rebuild = vi.spyOn(api, "rebuildDossier").mockResolvedValue("pending");
+    vi.spyOn(api, "joinCollab").mockResolvedValue({
+      hosting: null,
+      joined: { host_username: "alfan", shares: { share_ai: 1, share_tts: 0, share_stt: 0 } },
+    });
+
+    render(<SkripsiModal onClose={vi.fn()} onReady={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/API key belum diset/)).toBeTruthy());
+
+    fireEvent.click(screen.getByText(/Punya kode early access/));
+    fireEvent.change(await screen.findByLabelText(/Kode early access/), {
+      target: { value: "abc123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Gunakan kode" }));
+
+    await screen.findByText(/alfan/);
+    fireEvent.click(screen.getByRole("button", { name: "Mulai" }));
+
+    await waitFor(() => expect(rebuild).toHaveBeenCalled());
+  });
+
   // jsdom tidak melakukan layout, jadi lebarnya tidak bisa diukur di sini —
   // yang dijaga adalah dua kelas yang menahan overflow itu, karena keduanya
   // hidup di komponen shadcn yang gampang tertimpa saat di-generate ulang dan

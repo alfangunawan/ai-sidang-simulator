@@ -13,6 +13,11 @@ import { AuthPage } from "./pages/AuthPage.js";
 import { LandingPage } from "./pages/LandingPage.js";
 import { SetupModal, type MicState } from "./components/SetupModal.js";
 import { SkripsiModal } from "./components/SkripsiModal.js";
+import {
+  EarlyAccessBanner,
+  EarlyAccessModal,
+  earlyAccessSeen,
+} from "./components/EarlyAccess.js";
 import { DEFAULT_PERSONA, personaFor } from "./personas.js";
 import type { Persona } from "./personas.js";
 import {
@@ -56,6 +61,7 @@ export default function App() {
   const [mic, setMic] = useState<MicState>("idle");
   const [starting, setStarting] = useState(false);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [welcome, setWelcome] = useState(() => !earlyAccessSeen());
   // Remounts SessionPage so it picks up the session it is meant to run.
   const [sitting, setSitting] = useState(0);
   const [resumable, setResumable] = useState(() => hasStoredSession());
@@ -205,6 +211,8 @@ export default function App() {
         </div>
       </header>
 
+      <EarlyAccessBanner className="no-print" onEnterCode={() => setWelcome(true)} />
+
       <main className="mx-auto w-full max-w-6xl px-4 py-8">
         {tab === "beranda" &&
           (inSession ? (
@@ -249,6 +257,8 @@ export default function App() {
 
         {tab === "pengaturan" && <SettingsPage />}
       </main>
+
+      {welcome && <EarlyAccessModal onClose={() => setWelcome(false)} />}
 
       {needSkripsi && (
         <SkripsiModal

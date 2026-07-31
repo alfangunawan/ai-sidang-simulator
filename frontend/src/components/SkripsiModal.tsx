@@ -4,6 +4,7 @@ import { getDossier, getSkripsi, rebuildDossier, uploadSkripsi } from "../api.js
 import type { DossierStatus, SkripsiInfo } from "../types.js";
 import { DossierProgress } from "./DossierProgress.js";
 import { Dropzone } from "./Dropzone.js";
+import { EarlyAccessModal } from "./EarlyAccess.js";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export function SkripsiModal({ onClose, onReady }: Props) {
   const [reason, setReason] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [codeOpen, setCodeOpen] = useState(false);
 
   // Naskah bisa sudah ada dari sesi sebelumnya dengan pembacaan yang gagal —
   // tanpa ini modal menampilkan kotak unggah kosong dan menyembunyikan satu-
@@ -166,6 +168,13 @@ export function SkripsiModal({ onClose, onReady }: Props) {
               {reason ?? "Pembacaan naskah oleh model gagal."} Naskahnya sendiri sudah
               tersimpan — perbaiki penyebabnya di Pengaturan (API key, kuota, atau
               model) lalu tekan Baca ulang naskah, atau unggah PDF lain di bawah.
+              {/* Penyebab tersering di early access adalah tidak adanya key sama
+                  sekali, dan kode kolaborasi menyelesaikannya tanpa user harus
+                  punya API key sendiri — jadi jalan keluarnya ditawarkan di
+                  sini, bukan cuma di dashboard. */}
+              <Button variant="outline" size="sm" onClick={() => setCodeOpen(true)}>
+                Punya kode early access? Masukkan di sini
+              </Button>
             </AlertDescription>
           </Alert>
         )}
@@ -191,6 +200,13 @@ export function SkripsiModal({ onClose, onReady }: Props) {
           )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Key baru dari kode kolaborasi tidak berguna kalau naskahnya tetap
+          menganggur dengan status gagal, jadi pembacaan diulang sendiri begitu
+          kodenya diterima. */}
+      {codeOpen && (
+        <EarlyAccessModal onClose={() => setCodeOpen(false)} onJoined={retry} />
+      )}
     </Dialog>
   );
 }

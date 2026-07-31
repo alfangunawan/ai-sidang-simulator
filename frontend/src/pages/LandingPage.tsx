@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
+import { EarlyAccessBanner } from "../components/EarlyAccess.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -371,6 +372,10 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
 
   return (
     <div className="min-h-dvh bg-background">
+      {/* Di atas header, bukan di dalamnya: header ini sticky, dan pengumuman
+          yang ikut menempel memakan tinggi layar sepanjang halaman. */}
+      <EarlyAccessBanner />
+
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-6 px-4 py-3">
           <a href="#atas" className="flex items-center gap-2.5">
