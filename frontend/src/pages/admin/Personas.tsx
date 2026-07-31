@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -21,6 +23,10 @@ const BLANK: AdminPersonaRow = {
 export function Personas() {
   const [rows, setRows] = useState<AdminPersonaRow[] | null>(null);
   const [edit, setEdit] = useState<AdminPersonaRow | null>(null);
+  // Kunci hanya boleh diisi saat membuat persona baru: PUT mengirim ke
+  // /admin/personas/:key memakai key ini, jadi mengubahnya di tengah "Ubah"
+  // membuat baris baru alih-alih mengganti nama baris lama.
+  const [isNew, setIsNew] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   function reload() {
@@ -41,10 +47,19 @@ export function Personas() {
   if (err && !rows) return <p role="alert" className="text-sm text-destructive">{err}</p>;
   if (!rows) return <p className="text-sm text-muted-foreground">Memuat…</p>;
 
+  function openNew() {
+    setEdit({ ...BLANK, position: rows!.length });
+    setIsNew(true);
+  }
+  function openEdit(p: AdminPersonaRow) {
+    setEdit(p);
+    setIsNew(false);
+  }
+
   return (
     <div className="space-y-4">
       {err && <p role="alert" className="text-sm text-destructive">{err}</p>}
-      <Button size="sm" onClick={() => setEdit({ ...BLANK, position: rows.length })}>
+      <Button size="sm" onClick={openNew}>
         Persona baru
       </Button>
 
@@ -55,12 +70,13 @@ export function Personas() {
               <TableHead>Nama</TableHead>
               <TableHead>Mode</TableHead>
               <TableHead>Tipe</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((p) => (
-              <TableRow key={p.key}>
+              <TableRow key={p.key} className={!p.active ? "opacity-60" : undefined}>
                 <TableCell>
                   <span className="font-medium">{p.name}</span>
                   <span className="block text-xs text-muted-foreground">{p.role}</span>
@@ -68,8 +84,13 @@ export function Personas() {
                 <TableCell>{p.mode}</TableCell>
                 <TableCell>{p.type}</TableCell>
                 <TableCell>
+                  <Badge variant={p.active ? "secondary" : "outline"}>
+                    {p.active ? "Aktif" : "Nonaktif"}
+                  </Badge>
+                </TableCell>
+                <TableCell>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="xs" onClick={() => setEdit(p)}>
+                    <Button variant="outline" size="xs" onClick={() => openEdit(p)}>
                       Ubah {p.key}
                     </Button>
                     <Button
@@ -90,7 +111,7 @@ export function Personas() {
       <Dialog open={edit !== null} onOpenChange={(next) => !next && setEdit(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{edit?.key ? `Ubah ${edit.key}` : "Persona baru"}</DialogTitle>
+            <DialogTitle>{isNew ? "Persona baru" : `Ubah ${edit?.key}`}</DialogTitle>
           </DialogHeader>
           {edit && (
             <div className="space-y-3">
@@ -110,11 +131,23 @@ export function Personas() {
                   <Input
                     id={`p-${field}`}
                     className="mt-1"
+                    disabled={field === "key" && !isNew}
                     value={edit[field]}
-                    onChange={(e) => setEdit({ ...edit, [field]: e.target.value })}
+                    onChange={(e) => {
+                      if (field === "key" && !isNew) return; // read-only once saved
+                      setEdit({ ...edit, [field]: e.target.value });
+                    }}
                   />
                 </div>
               ))}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="p-active"
+                  checked={edit.active}
+                  onCheckedChange={(v) => setEdit({ ...edit, active: v === true })}
+                />
+                <Label htmlFor="p-active">Aktif</Label>
+              </div>
               <div>
                 <Label htmlFor="p-trait">Sifat</Label>
                 <Textarea
