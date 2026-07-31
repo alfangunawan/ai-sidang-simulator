@@ -9,9 +9,16 @@ import {
 import { getProvider } from "../providers/index.js";
 import { getUsageView, resetUsage } from "../repos/usage.js";
 import { resolveSourceUser, getEffectiveTtsConfig } from "../effectiveConfig.js";
+import { listPersonas } from "../repos/personas.js";
 
 export function settingsRouter(db: Database.Database, key: Buffer): Router {
   const r = Router();
+
+  // Dibaca picker penguji dan header sidang, jadi terbuka untuk semua pengguna
+  // yang sudah masuk — yang admin-only hanya penyuntingannya.
+  r.get("/personas", (_req, res) => {
+    res.json({ personas: listPersonas(db) });
+  });
 
   r.get("/", (req, res) => {
     const userId = req.userId!;

@@ -5,6 +5,8 @@ import { getUserById, setAdmin, setSuspended, countAdmins } from "../repos/users
 import { kickMember } from "../repos/collab.js";
 import { listQuestions, replacePhase } from "../repos/questions.js";
 import { SIDANG_PHASES } from "../phases.js";
+import { listPersonas, upsertPersona, deletePersona } from "../repos/personas.js";
+import type { PersonaRow } from "../personas.js";
 
 export function adminRouter(
   db: Database.Database,
@@ -116,6 +118,42 @@ export function adminRouter(
       return res.status(400).json({ error: "Daftar pertanyaan harus berupa teks" });
     }
     replacePhase(db, phase, texts);
+    res.json({ ok: true });
+  });
+
+  r.get("/personas", (_req, res) => {
+    res.json({ personas: listPersonas(db, { includeInactive: true }) });
+  });
+
+  r.put("/personas/:key", (req, res) => {
+    const b = req.body ?? {};
+    const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const row: PersonaRow = {
+      key: req.params.key,
+      name: text(b.name),
+      initials: text(b.initials),
+      role: text(b.role),
+      mode: text(b.mode),
+      type: text(b.type),
+      color: text(b.color) || "#475569",
+      trait: text(b.trait),
+      position: Number.isFinite(b.position) ? Number(b.position) : 0,
+      active: b.active !== false,
+    };
+    if (!row.name || !row.initials || !row.mode || !row.type) {
+      return res.status(400).json({ error: "Nama, inisial, mode, dan tipe wajib diisi" });
+    }
+    upsertPersona(db, row);
+    res.json({ ok: true });
+  });
+
+  r.delete("/personas/:key", (req, res) => {
+    // Picker mahasiswa tidak boleh berakhir kosong.
+    const active = listPersonas(db);
+    if (active.length <= 1 && active.some((p) => p.key === req.params.key)) {
+      return res.status(400).json({ error: "Persona terakhir tidak bisa dihapus" });
+    }
+    deletePersona(db, req.params.key);
     res.json({ ok: true });
   });
 

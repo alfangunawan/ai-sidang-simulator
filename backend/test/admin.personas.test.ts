@@ -1,0 +1,86 @@
+import { describe, it, expect } from "vitest";
+import request from "supertest";
+import { randomBytes } from "node:crypto";
+import { openDb } from "../src/db.js";
+import { buildApp } from "../src/app.js";
+import { setAdmin } from "../src/repos/users.js";
+import { PERSONA_SEED } from "../src/personas.js";
+
+function ctx() {
+  const db = openDb(":memory:");
+  return { db, app: buildApp(db, randomBytes(32)) };
+}
+async function reg(app: any, username: string) {
+  const agent = request.agent(app);
+  const { body } = await agent
+    .post("/auth/register")
+    .send({ username, password: "password1" })
+    .expect(200);
+  return { agent, id: body.user.id };
+}
+
+describe("GET /settings/personas", () => {
+  it("is readable by any signed-in user and needs no admin", async () => {
+    const { app } = ctx();
+    const budi = await reg(app, "budi");
+    const { body } = await budi.agent.get("/settings/personas").expect(200);
+    expect(body.personas.map((p: any) => p.key)).toEqual(PERSONA_SEED.map((p) => p.key));
+  });
+
+  it("is 401 without a cookie", async () => {
+    const { app } = ctx();
+    await request(app).get("/settings/personas").expect(401);
+  });
+});
+
+describe("/admin/personas", () => {
+  it("creates, updates, and deletes a persona", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+
+    const zaki = {
+      key: "zaki", name: "Dr. Zaki", initials: "DZ", role: "Penguji tamu",
+      mode: "kritis", type: "domain", color: "#123456", trait: "Baru.",
+      position: 99, active: true,
+    };
+    await admin.agent.put("/admin/personas/zaki").send(zaki).expect(200);
+    let list = (await admin.agent.get("/admin/personas").expect(200)).body.personas;
+    expect(list.find((p: any) => p.key === "zaki").name).toBe("Dr. Zaki");
+
+    await admin.agent
+      .put("/admin/personas/zaki")
+      .send({ ...zaki, name: "Dr. Zaki Rahman" })
+      .expect(200);
+    list = (await admin.agent.get("/admin/personas")).body.personas;
+    expect(list.find((p: any) => p.key === "zaki").name).toBe("Dr. Zaki Rahman");
+
+    await admin.agent.delete("/admin/personas/zaki").expect(200);
+    list = (await admin.agent.get("/admin/personas")).body.personas;
+    expect(list.some((p: any) => p.key === "zaki")).toBe(false);
+  });
+
+  it("rejects a body missing required fields", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    await admin.agent.put("/admin/personas/zaki").send({ name: "" }).expect(400);
+  });
+
+  // Menghapus persona terakhir membuat picker mahasiswa kosong.
+  it("refuses to delete the last active persona", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    setAdmin(db, admin.id, 1);
+    for (const p of PERSONA_SEED.slice(1)) {
+      await admin.agent.delete(`/admin/personas/${p.key}`).expect(200);
+    }
+    await admin.agent.delete(`/admin/personas/${PERSONA_SEED[0].key}`).expect(400);
+  });
+
+  it("is 403 for a plain user", async () => {
+    const { app } = ctx();
+    const budi = await reg(app, "budi");
+    await budi.agent.get("/admin/personas").expect(403);
+  });
+});
