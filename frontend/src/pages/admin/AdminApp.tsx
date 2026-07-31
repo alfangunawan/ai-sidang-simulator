@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Overview } from "./Overview.js";
+import { Users } from "./Users.js";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { User } from "../../types.js";
@@ -59,7 +60,8 @@ export function AdminApp({ user }: { user: User }) {
 
         <main className="min-w-0 flex-1">
           {section === "ringkasan" && <Overview />}
-          {section !== "ringkasan" && (
+          {section === "pengguna" && <Users selfId={user.id} />}
+          {!["ringkasan", "pengguna"].includes(section) && (
             <p className="text-sm text-muted-foreground">Bagian ini belum dibuat.</p>
           )}
         </main>

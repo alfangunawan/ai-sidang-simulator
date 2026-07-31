@@ -143,3 +143,15 @@ export interface AdminOverview {
   top_spenders: { user_id: number; username: string; cost_usd: number; tokens: number }[];
   signups: { day: string; count: number }[];
 }
+export interface AdminUserRow {
+  id: number;
+  username: string;
+  created_at: string;
+  suspended: boolean;
+  is_admin: boolean;
+  sessions: number;
+  documents: number;
+  cost_usd: number;
+  tokens: number;
+  key_owner: string | null;
+}
