@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Search } from "lucide-react";
-import { listSessions, getTurns, deleteSession } from "../api.js";
+import { listSessions, getTurns, deleteSession, closeSession } from "../api.js";
 import type { SessionSummary, Turn } from "../types.js";
 import { Transcript } from "../components/Transcript.js";
 import { ConfirmModal } from "../components/ConfirmModal.js";
@@ -73,6 +73,24 @@ export function HistoryPage({ onOpenResult, openId, onOpened }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "scored" | "unscored">("all");
+  // Sesi yang sedang dinilai; satu panggilan LLM, jadi tombolnya harus bicara.
+  const [scoring, setScoring] = useState<string | null>(null);
+
+  // Sidang yang ditutup lewat "Keluar" belum punya nilai. Menilainya belakangan
+  // memakai /close yang sama — gerbangnya hanya memantul kalau penilaian sudah ada.
+  async function scoreSession(id: string) {
+    if (scoring) return;
+    setScoring(id);
+    setErr(null);
+    try {
+      await closeSession(id);
+      onOpenResult(id);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setScoring(null);
+    }
+  }
 
   useEffect(() => {
     listSessions()
@@ -176,9 +194,14 @@ export function HistoryPage({ onOpenResult, openId, onOpened }: Props) {
             <Button variant="outline" onClick={() => exportSession(selected, detailTurns)}>
               Export CSV
             </Button>
-            {selected.status === "closed" && (
-              <Button onClick={() => onOpenResult(selected.id)}>Lihat hasil sidang</Button>
-            )}
+            {selected.status === "closed" &&
+              (selected.final_score != null ? (
+                <Button onClick={() => onOpenResult(selected.id)}>Lihat hasil sidang</Button>
+              ) : (
+                <Button disabled={scoring === selected.id} onClick={() => scoreSession(selected.id)}>
+                  {scoring === selected.id ? "Menilai…" : "Nilai sidang ini"}
+                </Button>
+              ))}
             <Button variant="outline" className="text-destructive hover:text-destructive"
               onClick={() => setConfirmId(selected.id)}>
               Hapus
@@ -310,11 +333,20 @@ export function HistoryPage({ onOpenResult, openId, onOpened }: Props) {
                             <Button variant="outline" size="sm" onClick={() => open(s)}>
                               Buka
                             </Button>
-                            {s.status === "closed" && (
-                              <Button size="sm" onClick={() => onOpenResult(s.id)}>
-                                Lihat Hasil
-                              </Button>
-                            )}
+                            {s.status === "closed" &&
+                              (s.final_score != null ? (
+                                <Button size="sm" onClick={() => onOpenResult(s.id)}>
+                                  Lihat Hasil
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  disabled={scoring === s.id}
+                                  onClick={() => scoreSession(s.id)}
+                                >
+                                  {scoring === s.id ? "Menilai…" : "Nilai"}
+                                </Button>
+                              ))}
                             <Button
                               variant="ghost"
                               size="sm"

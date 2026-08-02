@@ -251,10 +251,7 @@ export default function App() {
               personas={personas}
               phases={phases}
               onClosed={showResult}
-              onNewSession={() => {
-                goHome();
-                openSetup(1);
-              }}
+              onExit={goHome}
             />
           ) : (
             <HomePage

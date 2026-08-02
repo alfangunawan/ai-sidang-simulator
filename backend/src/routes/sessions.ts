@@ -24,6 +24,7 @@ import {
   countExaminerTurns,
   getSessionMeta,
   setCloseDeclined,
+  closeUnscored,
   closeWithAssessment,
 } from "../repos/sessions.js";
 import {
@@ -228,6 +229,19 @@ export function sessionsRouter(
       return res.status(404).json({ error: "Sesi tidak ditemukan" });
     }
     setCloseDeclined(db, sessionId, countExaminerTurns(db, sessionId));
+    res.json({ ok: true });
+  });
+
+  // Keluar tanpa nilai. Bukan cabang di dalam /close: penjaga di sana (API key,
+  // dossier siap, panggilan LLM, retry) semuanya tentang penilaian, dan tidak
+  // satu pun berlaku untuk mahasiswa yang cuma ingin berhenti.
+  r.post("/:id/exit", (req, res) => {
+    const userId = req.userId!;
+    const sessionId = req.params.id;
+    if (!sessionExists(db, sessionId, userId)) {
+      return res.status(404).json({ error: "Sesi tidak ditemukan" });
+    }
+    closeUnscored(db, sessionId, now());
     res.json({ ok: true });
   });
 

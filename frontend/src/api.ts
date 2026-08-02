@@ -83,6 +83,11 @@ export async function continueSession(id: string): Promise<void> {
   await jsonOrThrow(await postJson(`/api/sessions/${id}/continue`, {}));
 }
 
+/** Tutup sidang tanpa penilaian; transkripnya tetap ada dan masih bisa dinilai. */
+export async function exitSession(id: string): Promise<void> {
+  await jsonOrThrow(await postJson(`/api/sessions/${id}/exit`, {}));
+}
+
 export async function closeSession(id: string): Promise<Assessment> {
   return (await jsonOrThrow(await postJson(`/api/sessions/${id}/close`, {}))).assessment;
 }

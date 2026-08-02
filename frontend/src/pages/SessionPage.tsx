@@ -7,6 +7,7 @@ import {
   getSettings,
   closeSession,
   continueSession,
+  exitSession,
 } from "../api.js";
 import type { Turn, Assessment } from "../types.js";
 import { personaFor, DEFAULT_PERSONA, MODE_LABELS } from "../personas.js";
@@ -70,11 +71,11 @@ interface Props {
   /** Bab yang dipilih di dialog persiapan; undefined (sesi lanjutan) = semua bab. */
   phases?: string[];
   onClosed: (a: Assessment) => void;
-  /** "Sesi Baru" hands the student back to the persona picker, not a silent reset. */
-  onNewSession: () => void;
+  /** Sidang ditutup tanpa nilai; mahasiswa kembali ke Beranda. */
+  onExit: () => void;
 }
 
-export function SessionPage({ personas, phases, onClosed, onNewSession }: Props) {
+export function SessionPage({ personas, phases, onClosed, onExit }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [manual, setManual] = useState("");
@@ -84,7 +85,7 @@ export function SessionPage({ personas, phases, onClosed, onNewSession }: Props)
   const [ttsProvider, setTtsProvider] = useState<string>("browser");
   const [sttProvider, setSttProvider] = useState<string>("browser");
   const [closeOpen, setCloseOpen] = useState(false);
-  const [closeSource, setCloseSource] = useState<"ai" | "manual">("manual");
+  const [closeSource, setCloseSource] = useState<"ai" | "manual" | "exit">("manual");
   // The examiner asked to wrap up. Shown as a banner under the transcript, not
   // as a modal — a modal would cover the closing reply the student needs to read.
   const [proposeClose, setProposeClose] = useState(false);
@@ -226,12 +227,30 @@ export function SessionPage({ personas, phases, onClosed, onNewSession }: Props)
     }
   }
 
-  // Back to the persona picker. The old session is kept (it lives in Riwayat)
-  // — a fresh one is only created once a new examiner is confirmed.
-  function newSession() {
-    stt.reset();
-    tts.cancel();
-    onNewSession();
+  function askExit() {
+    setCloseSource("exit");
+    setCloseOpen(true);
+  }
+
+  // Keluar tanpa nilai: sidang ditutup di server, jadi ia tidak muncul lagi
+  // sebagai "Lanjutkan sidang" di Beranda. Transkripnya tetap di Riwayat, dan
+  // masih bisa dinilai dari sana kalau mahasiswa berubah pikiran.
+  async function confirmExit() {
+    if (!sessionId || closing) return;
+    setClosing(true);
+    setErr(null);
+    try {
+      await exitSession(sessionId);
+      stt.reset();
+      tts.cancel();
+      clearStoredSession();
+      setCloseOpen(false);
+      onExit();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setClosing(false);
+    }
   }
 
   function askClose() {
@@ -336,7 +355,7 @@ export function SessionPage({ personas, phases, onClosed, onNewSession }: Props)
           </p>
         </div>
         <span className="text-xs text-muted-foreground">
-          Penguji terkunci selama sidang berjalan — ganti lewat Sesi Baru.
+          Penguji terkunci selama sidang berjalan — ganti di sesi berikutnya.
         </span>
       </div>
 
@@ -531,8 +550,8 @@ export function SessionPage({ personas, phases, onClosed, onNewSession }: Props)
                 )}
               </span>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={newSession}>
-                  Sesi Baru
+                <Button variant="outline" size="sm" onClick={askExit}>
+                  Keluar
                 </Button>
                 <Button
                   variant="ghost"
@@ -597,15 +616,25 @@ export function SessionPage({ personas, phases, onClosed, onNewSession }: Props)
 
       <ConfirmModal
         open={closeOpen}
-        title="Akhiri sidang?"
+        title={closeSource === "exit" ? "Keluar tanpa nilai?" : "Akhiri sidang?"}
         message={
-          closeSource === "ai"
-            ? "Penguji merasa sidang sudah cukup. Akhiri sidang & lihat hasil penilaian?"
-            : "Akhiri sidang sekarang & lihat hasil penilaian?"
+          closeSource === "exit"
+            ? "Sidang ditutup tanpa penilaian dan tidak bisa dilanjutkan. Transkripnya tetap tersimpan di Riwayat, dan Anda masih bisa memintanya dinilai dari sana."
+            : closeSource === "ai"
+              ? "Penguji merasa sidang sudah cukup. Akhiri sidang & lihat hasil penilaian?"
+              : "Akhiri sidang sekarang & lihat hasil penilaian?"
         }
-        confirmLabel={closing ? "Menilai…" : "Akhiri & lihat hasil"}
+        confirmLabel={
+          closeSource === "exit"
+            ? closing
+              ? "Menutup…"
+              : "Keluar tanpa nilai"
+            : closing
+              ? "Menilai…"
+              : "Akhiri & lihat hasil"
+        }
         cancelLabel="Batal"
-        onConfirm={confirmClose}
+        onConfirm={closeSource === "exit" ? confirmExit : confirmClose}
         onCancel={cancelClose}
       />
     </div>

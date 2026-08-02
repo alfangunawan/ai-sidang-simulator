@@ -129,6 +129,21 @@ export function setCloseDeclined(
   );
 }
 
+/**
+ * Keluar tanpa nilai: sidang ditutup, `assessment` dibiarkan NULL. Penilaian
+ * belakangan lewat /close tetap mungkin — gerbang di sana memantul hanya bila
+ * penilaiannya memang sudah ada.
+ */
+export function closeUnscored(
+  db: Database.Database,
+  sessionId: string,
+  closedAt: string,
+): void {
+  db.prepare(
+    "UPDATE sessions SET status = 'closed', closed_at = ? WHERE id = ? AND assessment IS NULL",
+  ).run(closedAt, sessionId);
+}
+
 export function closeWithAssessment(
   db: Database.Database,
   sessionId: string,
