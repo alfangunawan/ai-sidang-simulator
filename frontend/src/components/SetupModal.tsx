@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Mic, X } from "lucide-react";
 import { DEFAULT_PERSONA, heatOf, heatLabel, TYPE_LABELS } from "../personas.js";
 import type { Persona } from "../personas.js";
+import { ALL_PHASES, PHASE_CHOICES } from "../phases.js";
 import { useAudioLevel } from "../hooks/useAudioLevel.js";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,14 +38,14 @@ const TEST_MS = 4000;
 const HEARD = 0.02;
 
 interface Props {
-  step: 1 | 2;
+  step: 1 | 2 | 3;
   initial: Persona;
   personas: Persona[];
   mic: MicState;
   starting: boolean;
-  onStep: (step: 0 | 1 | 2) => void;
+  onStep: (step: 0 | 1 | 2 | 3) => void;
   onMic: (state: MicState) => void;
-  onStart: (persona: Persona) => void;
+  onStart: (persona: Persona, phases: string[]) => void;
 }
 
 export function SetupModal({
@@ -58,11 +59,14 @@ export function SetupModal({
   onStart,
 }: Props) {
   const [pending, setPending] = useState<Persona>(initial ?? DEFAULT_PERSONA);
-  // Opened straight at step 2 (the Kesiapan card's mic test) the dialog is only a
-  // mic test: backing out closes it instead of dropping the student into an
+  // Semua bab menyala di awal: sidang penuh adalah yang normal, mematikan bab
+  // adalah keputusan sadar mahasiswa yang ingin melatih satu bagian saja.
+  const [phases, setPhases] = useState<string[]>(ALL_PHASES);
+  // Opened straight at the last step (the Kesiapan card's mic test) the dialog is
+  // only a mic test: backing out closes it instead of dropping the student into an
   // examiner picker they never asked for. The modal is unmounted when closed, so
   // its first step is its entry point.
-  const [micOnly] = useState(step === 2);
+  const [micOnly] = useState(step === 3);
   const [testing, setTesting] = useState(false);
   const audio = useAudioLevel(testing);
   const peak = useRef(0);
@@ -110,21 +114,27 @@ export function SetupModal({
         <div className="flex shrink-0 items-start gap-4 border-b px-6 py-5">
           <div className="flex-1">
             <span className="text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-              {micOnly ? "Kesiapan" : `Langkah ${step} dari 2`}
+              {micOnly ? "Kesiapan" : `Langkah ${step} dari 3`}
             </span>
             <DialogTitle className="mt-1 font-serif text-xl">
-              {step === 1 ? "Pilih dosen penguji Anda" : "Cek kesiapan Anda"}
+              {step === 1
+                ? "Pilih dosen penguji Anda"
+                : step === 2
+                  ? "Pilih bab yang diuji"
+                  : "Cek kesiapan Anda"}
             </DialogTitle>
           </div>
           {!micOnly && (
             <div className="mt-2 flex gap-1.5" aria-hidden="true">
-              <i className="h-1.5 w-6 rounded-full bg-primary" />
-              <i
-                className={cn(
-                  "h-1.5 w-6 rounded-full",
-                  step === 2 ? "bg-primary" : "bg-border",
-                )}
-              />
+              {[1, 2, 3].map((n) => (
+                <i
+                  key={n}
+                  className={cn(
+                    "h-1.5 w-6 rounded-full",
+                    n <= step ? "bg-primary" : "bg-border",
+                  )}
+                />
+              ))}
             </div>
           )}
           <Button
@@ -138,7 +148,7 @@ export function SetupModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {step === 1 ? (
+          {step === 1 && (
             <>
               <p className="mb-4 text-sm text-muted-foreground">
                 Tiap penguji punya gaya menekan dan bidang yang dikejar sendiri. Pilih
@@ -213,7 +223,68 @@ export function SetupModal({
                 })}
               </div>
             </>
-          ) : (
+          )}
+
+          {step === 2 && (
+            <>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Default: semua bab diuji. Matikan bab yang belum ingin Anda hadapi — penguji
+                tidak akan menyentuhnya, dan sidang jadi lebih pendek. Pembukaan dan penutup
+                selalu ada.
+              </p>
+              <div className="flex flex-col gap-2">
+                {PHASE_CHOICES.map((c) => {
+                  const on = phases.includes(c.phase);
+                  return (
+                    <button
+                      key={c.phase}
+                      type="button"
+                      role="switch"
+                      aria-checked={on}
+                      onClick={() =>
+                        setPhases((prev) =>
+                          on
+                            ? prev.filter((p) => p !== c.phase)
+                            : ALL_PHASES.filter((p) => p === c.phase || prev.includes(p)),
+                        )
+                      }
+                      className={cn(
+                        "flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40",
+                        on ? "border-primary bg-primary/5" : "opacity-60",
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border",
+                          on
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input",
+                        )}
+                      >
+                        {on && <Check className="size-3" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">
+                          {c.bab} — {c.phase}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {c.hint}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {phases.length === 0 && (
+                <p className="mt-3 text-xs font-semibold text-destructive">
+                  Pilih minimal satu bab untuk diuji.
+                </p>
+              )}
+            </>
+          )}
+
+          {step === 3 && (
             <div className="flex flex-col gap-5">
               <ol className="flex flex-col gap-3">
                 {RULES.map((text, i) => (
@@ -302,20 +373,24 @@ export function SetupModal({
               ? "Tes ini tidak memulai sidang."
               : step === 1
                 ? "Penguji terkunci sampai sidang selesai."
-                : `Penguji: ${pending.name}`}
+                : step === 2
+                  ? `${phases.length} dari ${ALL_PHASES.length} bab diuji`
+                  : `Penguji: ${pending.name} · ${phases.length} bab`}
           </span>
           {micOnly ? (
             <Button onClick={() => onStep(0)}>Tutup</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={() => onStep(step === 2 ? 1 : 0)}>
+              <Button variant="outline" onClick={() => onStep(step === 1 ? 0 : ((step - 1) as 1 | 2))}>
                 {step === 1 ? "Batal" : "Kembali"}
               </Button>
               <Button
-                disabled={starting}
-                onClick={() => (step === 1 ? onStep(2) : onStart(pending))}
+                disabled={starting || (step === 2 && phases.length === 0)}
+                onClick={() =>
+                  step === 3 ? onStart(pending, phases) : onStep((step + 1) as 2 | 3)
+                }
               >
-                {step === 1 ? "Lanjut" : starting ? "Menyiapkan…" : "Mulai Sidang"}
+                {step < 3 ? "Lanjut" : starting ? "Menyiapkan…" : "Mulai Sidang"}
               </Button>
             </>
           )}

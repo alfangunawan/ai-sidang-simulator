@@ -1,4 +1,5 @@
 import { SIDANG_PHASES } from "./phases.js";
+import { minQuestions } from "./sidang.js";
 
 /**
  * Reservoir of examiner questions per sidang phase, ordered surface -> deep.
@@ -85,9 +86,6 @@ export const CRITIQUE_MODULES: Record<string, string> = {
 /** Satu-satunya sumber kebenaran nama modul; dossier memvalidasi terhadap ini. */
 export const CRITIQUE_TRIGGERS = Object.keys(CRITIQUE_MODULES);
 
-// Kalibrasi persona: 8–15 pertanyaan utama untuk 7 fase.
-const QUESTIONS_PER_PHASE = 2;
-
 /**
  * ponytail: fase ditaksir dari jumlah giliran penguji, bukan diketahui.
  * Tidak ada sumber kebenaran — model menjalankan agendanya sendiri dan tidak
@@ -96,12 +94,22 @@ const QUESTIONS_PER_PHASE = 2;
  * membuat contoh pertanyaan kurang pas, bukan membuat penguji kehilangan arah.
  * Upgrade bila terbukti kurang: minta model menempelkan penanda fase seperti
  * CLOSE_MARKER, lalu baca posisinya alih-alih menaksir.
+ *
+ * Lajunya diikat ke MIN_EXAMINER_QUESTIONS, bukan konstanta terpisah. Dulu 2
+ * pertanyaan per fase: jendela mentok di [Kesimpulan, Penutup] pada giliran 12
+ * padahal sidang belum boleh tutup sebelum 15, sehingga tiga giliran terakhir
+ * hanya punya bahan fase penutup — dan model merangkum sebelum waktunya karena
+ * memang kehabisan agenda. Sekarang fase terakhir baru tiba tepat di ambang.
  */
-export function phaseWindow(examinerCount: number): string[] {
-  const last = SIDANG_PHASES.length - 1;
-  const center = Math.min(last, Math.floor(examinerCount / QUESTIONS_PER_PHASE));
+export function phaseWindow(
+  examinerCount: number,
+  phases: string[] = SIDANG_PHASES,
+  min = minQuestions(phases),
+): string[] {
+  const last = phases.length - 1;
+  const center = Math.min(last, Math.floor((examinerCount * last) / min));
   const from = Math.max(0, center - 1);
-  return SIDANG_PHASES.slice(from, Math.min(last, center + 1) + 1);
+  return phases.slice(from, Math.min(last, center + 1) + 1);
 }
 
 /**
@@ -113,8 +121,9 @@ export function buildPhaseBlock(
   examinerCount: number,
   triggered: string[],
   bank: Record<string, string[]> = QUESTION_BANK,
+  agenda: string[] = SIDANG_PHASES,
 ): string {
-  const phases = phaseWindow(examinerCount).filter((p) => bank[p]?.length);
+  const phases = phaseWindow(examinerCount, agenda).filter((p) => bank[p]?.length);
   const blocks = phases.map((p) => `${p}:\n${bank[p].map((q) => `- ${q}`).join("\n")}`);
   const modules = triggered
     .filter((t) => CRITIQUE_MODULES[t])

@@ -7,6 +7,7 @@ import { getEffectiveLlmConfig, resolveSourceUser } from "../effectiveConfig.js"
 import { getActiveDocument, getDossierRow } from "../repos/documents.js";
 import { getChunks } from "../repos/chunks.js";
 import { buildPersona } from "../persona.js";
+import { normalizePhases, sessionPhases } from "../phases.js";
 import { buildPhaseBlock } from "../questionBank.js";
 import { listQuestions } from "../repos/questions.js";
 import { formatDossier, type Dossier } from "../dossier.js";
@@ -32,7 +33,16 @@ import {
   parseAssessment,
   type Assessment,
 } from "../assessment.js";
-import { stripCloseMarker, shouldProposeClose, withNonAnswerNudge } from "../sidang.js";
+import {
+  stripCloseMarker,
+  shouldProposeClose,
+  withNonAnswerNudge,
+  closeStatus,
+  closeFloor,
+  looksLikeClosing,
+  minQuestions,
+  EARLY_CLOSE_RETRY,
+} from "../sidang.js";
 import { recordUsage } from "../repos/usage.js";
 import { ASSESSMENT_MAX_TOKENS } from "../providers/types.js";
 
@@ -50,7 +60,13 @@ export function sessionsRouter(
   r.post("/", (req, res) => {
     const userId = req.userId!;
     const id = uuid();
-    createSession(db, userId, id, now(), (req.body?.label as string) ?? null);
+    let phases: string[] | null;
+    try {
+      phases = normalizePhases(req.body?.phases);
+    } catch {
+      return res.status(400).json({ error: "Pilihan fase tidak valid" });
+    }
+    createSession(db, userId, id, now(), (req.body?.label as string) ?? null, phases?.join(",") ?? null);
     res.json({ session_id: id });
   });
 
@@ -109,19 +125,24 @@ export function sessionsRouter(
 
       const cfg = getEffectiveLlmConfig(db, userId, key);
       const provider = getProvider(cfg);
+      // Agenda sesi ini: bab yang dipilih mahasiswa saat memulai sidang.
+      const agenda = sessionPhases(meta?.phases);
       const personaAttack = buildPersona(
         cfg.examinerMode,
         cfg.attackPoints,
         cfg.examinerType,
+        agenda,
       );
       const parsedDossier = JSON.parse(dossierRow.dossier) as Dossier;
       const dossier = formatDossier(parsedDossier);
       // Blok fase: contoh pertanyaan untuk fase terdekat + modul kritik yang
       // benar-benar dipicu skripsi ini. Ditaruh setelah blok yang di-cache.
+      const askedSoFar = countExaminerTurns(db, sessionId);
       const phaseBlock = buildPhaseBlock(
-        countExaminerTurns(db, sessionId),
+        askedSoFar,
         parsedDossier.modul_kritik_terpicu,
         listQuestions(db),
+        agenda,
       );
 
       // Kueri retrieval memakai pertanyaan penguji terakhir DAN jawaban
@@ -133,19 +154,35 @@ export function sessionsRouter(
         `${lastExaminer?.content ?? ""} ${transcript}`,
       );
 
-      // The nudge steers the model only; the transcript keeps what was actually said.
-      const result = await provider.sendTurn({
-        persona: personaAttack,
-        dossier,
-        phaseBlock,
-        history,
-        userInput: withNonAnswerNudge(transcript) + formatExcerpts(excerpts),
-      });
+      // The nudge and the close status steer the model only; the transcript
+      // keeps what was actually said.
+      const min = minQuestions(agenda);
+      const declinedTurn = meta?.close_declined_turn ?? null;
+      const ask = async (correction = "") => {
+        const out = await provider.sendTurn({
+          persona: personaAttack,
+          dossier,
+          phaseBlock,
+          history,
+          userInput:
+            withNonAnswerNudge(transcript) +
+            closeStatus(askedSoFar, declinedTurn, min) +
+            correction +
+            formatExcerpts(excerpts),
+        });
+        // Recorded before the empty-reply guard: the call was billed either way.
+        recordUsage(db, userId, resolveSourceUser(db, userId, "ai"), now(), cfg.provider, cfg.model, "turn", out.usage);
+        return stripCloseMarker(out.reply);
+      };
 
-      // Recorded before the empty-reply guard: the call was billed either way.
-      recordUsage(db, userId, resolveSourceUser(db, userId, "ai"), now(), cfg.provider, cfg.model, "turn", result.usage);
+      let { reply, hasMarker } = await ask();
 
-      const { reply, hasMarker } = stripCloseMarker(result.reply);
+      // Penutup yang datang sebelum gerbang buka tidak boleh masuk transkrip:
+      // sekali tersimpan, model membacanya di riwayat dan tidak bisa kembali
+      // bertanya — dan jatah rangkumannya habis sebelum giliran penutup asli.
+      if (askedSoFar + 1 < closeFloor(declinedTurn, min) && looksLikeClosing(reply, hasMarker)) {
+        ({ reply, hasMarker } = await ask(EARLY_CLOSE_RETRY));
+      }
 
       // A blank reply (reasoning model spending its whole budget before writing
       // any text) must not land in the transcript as an empty bubble.
@@ -159,7 +196,8 @@ export function sessionsRouter(
       const propose_close = shouldProposeClose({
         hasMarker,
         examinerCount,
-        declinedTurn: meta?.close_declined_turn ?? null,
+        declinedTurn,
+        min,
       });
       res.json({ reply, propose_close });
     } catch (err) {
@@ -231,6 +269,9 @@ export function sessionsRouter(
         formatDossier(JSON.parse(closeDossier.dossier) as Dossier),
         transcript,
         formatChunks(excerpts),
+        // Hanya untuk sidang sebagian bab: tanpa ini penilai menghukum
+        // mahasiswa atas fase yang memang tidak pernah ditanyakan penguji.
+        meta?.phases ? sessionPhases(meta.phases) : undefined,
       );
 
       // Every attempt is billed, so each one is recorded — including the one

@@ -67,12 +67,14 @@ function clock(secs: number): string {
 
 interface Props {
   personas: Persona[];
+  /** Bab yang dipilih di dialog persiapan; undefined (sesi lanjutan) = semua bab. */
+  phases?: string[];
   onClosed: (a: Assessment) => void;
   /** "Sesi Baru" hands the student back to the persona picker, not a silent reset. */
   onNewSession: () => void;
 }
 
-export function SessionPage({ personas, onClosed, onNewSession }: Props) {
+export function SessionPage({ personas, phases, onClosed, onNewSession }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [manual, setManual] = useState("");
@@ -101,7 +103,7 @@ export function SessionPage({ personas, onClosed, onNewSession }: Props) {
       let id = localStorage.getItem(SESSION_KEY);
       if (!id) {
         try {
-          id = await createSession();
+          id = await createSession(phases);
         } catch {
           return; // backend down on first load; leave as-is
         }

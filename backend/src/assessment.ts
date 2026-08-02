@@ -16,8 +16,6 @@ export interface Assessment {
   saran: string[];
 }
 
-const VERDICTS = ["Lulus", "Lulus dengan revisi", "Tidak lulus"];
-
 function clamp(n: unknown): number {
   const x = typeof n === "number" && isFinite(n) ? n : 0;
   return Math.max(0, Math.min(100, Math.round(x)));
@@ -72,6 +70,14 @@ Dasar penilaian (nilai dari transkrip, bukan dari kesan umum):
 - Jawaban yang mengelak, berputar, atau bertentangan dengan isi naskah menurunkan skor argumentasi dan penguasaan_materi.
 - Pertanyaan yang tidak terjawab sama sekali harus tercermin sebagai kekurangan, bukan diabaikan.
 - Nilai penguasaan_materi dan argumentasi paling berat karena keduanya diuji langsung lewat tanya jawab.
+- Yang dinilai adalah jawaban MAHASISWA, bukan gaya pengujinya. Penguji yang keras, banyak bertanya, atau memakai nada menekan TIDAK boleh menurunkan skor; penguji yang lunak TIDAK boleh menaikkannya. Sidang yang panjang belum tentu bernilai rendah.
+
+Jangkar skor (pakai ini supaya penilaian sebanding antar sidang, jangan menumpuk semua nilai di 50-65):
+- 85-100: hampir semua pertanyaan dijawab dengan data spesifik yang benar; klaim tetap bertahan saat dikonfrontasi naskah.
+- 70-84: mayoritas jawaban spesifik dan tepat; ada satu-dua titik lemah, tetapi diakui dan dijelaskan dengan alasan yang masuk akal.
+- 55-69: campuran — sebagian jawaban spesifik, sebagian umum atau normatif; kelemahan diakui tetapi tanpa penjelasan memadai.
+- 40-54: mayoritas jawaban umum, mengelak, atau "tidak tahu"; sedikit sekali data spesifik; beberapa klaim runtuh saat dikejar.
+- 0-39: hampir tidak ada jawaban substantif; kontradiksi dengan naskah dibiarkan; jelas tidak menguasai isi skripsinya sendiri.
 
 Keluarkan HANYA JSON valid (tanpa teks lain, tanpa code fence) dengan bentuk persis:
 {
@@ -99,8 +105,16 @@ export function buildAssessmentUser(
   dossier: string,
   transcript: string,
   excerpts = "",
+  phases?: string[],
 ): string {
   const parts = [`${dossier}`, `TRANSKRIP SIDANG:\n${transcript}`];
+  if (phases?.length) {
+    parts.push(
+      `CAKUPAN SIDANG: mahasiswa memilih menguji sebagian agenda saja — ${phases.join(", ")}. ` +
+        `Nilai hanya apa yang benar-benar ditanyakan. Dimensi yang tidak tersentuh tanya jawab dinilai dari isi naskah, ` +
+        `dan tidak boleh diturunkan hanya karena topiknya tidak keluar. Jangan menuliskan fase yang tidak diuji sebagai kekurangan mahasiswa.`,
+    );
+  }
   if (excerpts) parts.push(`KUTIPAN NASKAH TERKAIT:\n${excerpts}`);
   return parts.join("\n\n");
 }
@@ -130,13 +144,14 @@ export function parseAssessment(text: string): Assessment {
     typeof obj?.final_score === "number" && isFinite(obj.final_score)
       ? clamp(obj.final_score)
       : avg;
-  const verdict = VERDICTS.includes(obj?.verdict) ? obj.verdict : deriveVerdict(final_score);
-
   return {
     scores,
     final_score,
     grade: deriveGrade(final_score),
-    verdict,
+    // Diturunkan, tidak diambil dari model. Sebelumnya cukup ada di daftar
+    // verdict yang sah untuk dipakai apa adanya, sehingga skor 41-50 keluar
+    // sebagai "D" tetapi "Lulus dengan revisi" — 3 dari 13 sidang uji kena.
+    verdict: deriveVerdict(final_score),
     ringkasan: typeof obj?.ringkasan === "string" ? obj.ringkasan.trim() : "",
     kelebihan: strArray(obj?.kelebihan),
     kekurangan: strArray(obj?.kekurangan),

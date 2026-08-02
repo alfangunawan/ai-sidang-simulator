@@ -1,4 +1,4 @@
-import { CLOSE_MARKER } from "./sidang.js";
+import { CLOSE_MARKER, MIN_EXAMINER_QUESTIONS, minQuestions } from "./sidang.js";
 import { SIDANG_PHASES, CORE_PHASES } from "./phases.js";
 
 export { SIDANG_PHASES };
@@ -7,8 +7,9 @@ export const PERSONA_TONE = `Anda adalah dosen penguji sidang skripsi S1 yang be
 Tujuan Anda: menguji apakah mahasiswa benar-benar memahami dan dapat mempertanggungjawabkan karyanya, bukan menghafal. Anda tidak berniat menjatuhkan, tetapi Anda tidak melepaskan jawaban lemah tanpa menggali.
 
 Aturan output (WAJIB):
-- Satu pertanyaan atau tanggapan penguji per giliran.
-- SANGAT ringkas: 1–2 kalimat, langsung ke inti, maksimal sekitar 35 kata. Tanpa basa-basi, tanpa pujian, tanpa pengantar.
+- Satu pertanyaan atau tanggapan penguji per giliran. SATU pertanyaan saja: dilarang menggabungkan dua permintaan dalam satu balasan ("sebutkan nomor tabelnya DAN jelaskan mekanismenya"). Pilih satu, simpan sisanya untuk giliran berikutnya.
+- SANGAT ringkas: 1–2 kalimat, langsung ke inti, maksimal 35 kata. Hitung sendiri sebelum mengirim; kalau lewat, buang anak kalimatnya. Tanpa basa-basi, tanpa pujian, tanpa pengantar.
+- Nomor halaman hanya boleh Anda sebut bila angkanya benar-benar tertera pada KUTIPAN NASKAH yang diberikan di giliran ini. Kalau tidak ada, sebut bab atau nama bagiannya saja — jangan menaksir, jangan membulatkan. Menyebut halaman yang salah membuat mahasiswa mencari sesuatu yang tidak ada di situ.
 - Basiskan pertanyaan pada isi skripsi di bawah. Jika ada poin serangan, prioritaskan itu.
 - Jika jawaban mahasiswa dangkal atau menghindar, kejar titik itu di giliran berikutnya.`;
 
@@ -110,16 +111,30 @@ export const DEFAULT_ATTACK_POINTS = "";
 // Kalibrasi jumlah pertanyaan: ~30 menit tanya jawab pada sidang sarjana.
 export const TARGET_MAIN_QUESTIONS = "8–15";
 
-export function buildAgendaRules(): string {
-  const list = SIDANG_PHASES.map((p, i) => `${i + 1}. ${p}`).join("\n");
+// Sidang sebagian bab memakai target yang diskala dari angka sidang penuh, bukan
+// angka tetap: rentangnya harus turun bersama ambang tutup, kalau tidak penguji
+// diberi target 8–15 pertanyaan sementara sidang boleh ditutup di angka 6.
+function targetQuestions(min: number): string {
+  if (min === MIN_EXAMINER_QUESTIONS) return TARGET_MAIN_QUESTIONS;
+  return `${Math.max(3, Math.round((8 * min) / MIN_EXAMINER_QUESTIONS))}–${min}`;
+}
+
+export function buildAgendaRules(phases: string[] = SIDANG_PHASES): string {
+  const list = phases.map((p, i) => `${i + 1}. ${p}`).join("\n");
+  const core = phases.filter((p) => CORE_PHASES.includes(p));
+  const partial = core.length < CORE_PHASES.length;
   return `AGENDA SIDANG (ikuti berurutan, jangan buru-buru):
 ${list}
 
 Aturan jalannya sidang:
-- Telusuri setiap fase secara berurutan; ajukan minimal 2 pertanyaan menggali pada fase inti (${CORE_PHASES.join(", ")}).
+- Telusuri setiap fase secara berurutan; ajukan minimal 2 pertanyaan menggali pada fase inti (${core.join(", ")}).${
+    partial
+      ? `\n- Sidang ini SENGAJA dibatasi pada fase di atas. DILARANG mengajukan pertanyaan di luar fase itu; bab lain hanya boleh disinggung sejauh diperlukan untuk menguji fase yang dipilih.`
+      : ""
+  }
 - Kejar jawaban yang dangkal atau menghindar sebelum pindah fase. Sidang harus panjang dan menyeluruh.
-- Kalibrasi: targetkan ${TARGET_MAIN_QUESTIONS} pertanyaan utama per sidang, menyentuh minimal 5 fase, dengan 2–4 follow-up per topik. JANGAN menutup sebuah topik hanya dengan satu tanya-jawab bila jawaban belum menyentuh data spesifik.
-- Pada fase Penutup, sebelum menutup, rangkum kelemahan utama yang Anda temukan dan sebutkan revisi konkret yang harus dikerjakan mahasiswa. Khusus giliran penutup ini, panjang balasan boleh sampai sekitar 80 kata.
+- Kalibrasi: targetkan ${targetQuestions(minQuestions(phases))} pertanyaan utama per sidang, menyentuh minimal ${Math.min(5, phases.length)} fase, dengan 2–4 follow-up per topik. JANGAN menutup sebuah topik hanya dengan satu tanya-jawab bila jawaban belum menyentuh data spesifik.
+- Pada fase Penutup, sebelum menutup, rangkum kelemahan utama yang Anda temukan dan sebutkan revisi konkret yang harus dikerjakan mahasiswa. Khusus giliran penutup ini, panjang balasan boleh sampai sekitar 150 kata. Rangkuman ini hanya boleh muncul SEKALI, di giliran penutup — jangan merangkum di tengah sidang.
 - JANGAN menyatakan sidang selesai atau cukup di dalam teks balasan.
 - Hanya setelah SEMUA fase termasuk Penutup benar-benar terbahas, tempel penanda ${CLOSE_MARKER} sebagai baris terakhir balasan Anda — dan hanya saat itu. Tanpa penanda, sidang dianggap masih berjalan.`;
 }
@@ -134,6 +149,7 @@ export function buildPersona(
   mode: string,
   attackPoints: string,
   type: string = DEFAULT_EXAMINER_TYPE,
+  phases: string[] = SIDANG_PHASES,
 ): string {
   const selected = EXAMINER_MODES[mode] ?? EXAMINER_MODES[DEFAULT_EXAMINER_MODE];
   const archetype = EXAMINER_TYPES[type] ?? EXAMINER_TYPES[DEFAULT_EXAMINER_TYPE];
@@ -145,7 +161,7 @@ export function buildPersona(
     DIALOGUE_RULES,
     ESCALATION_RULES,
     EXAMINER_PHRASES,
-    buildAgendaRules(),
+    buildAgendaRules(phases),
   ];
   const trimmed = (attackPoints ?? "").trim();
   if (trimmed) {

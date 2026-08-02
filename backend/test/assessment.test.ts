@@ -84,6 +84,20 @@ describe("parseAssessment", () => {
     expect(a.grade).toBe("A");
   });
 
+  // Ditemukan di 3 dari 13 sidang uji: skor 41-50 keluar sebagai "D" tetapi
+  // "Lulus dengan revisi", karena verdict model dipakai apa adanya asal
+  // string-nya sah.
+  it("re-derives verdict from the score, not from the model", () => {
+    const failing = parseAssessment(
+      JSON.stringify({ final_score: 45, verdict: "Lulus dengan revisi" }),
+    );
+    expect(failing.grade).toBe("D");
+    expect(failing.verdict).toBe("Tidak lulus");
+
+    const passing = parseAssessment(JSON.stringify({ final_score: 80, verdict: "Tidak lulus" }));
+    expect(passing.verdict).toBe("Lulus");
+  });
+
   it("throws when no JSON object is present", () => {
     expect(() => parseAssessment("maaf, tidak bisa menilai")).toThrow();
   });

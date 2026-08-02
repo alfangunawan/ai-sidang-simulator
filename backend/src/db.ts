@@ -144,6 +144,9 @@ export function openDb(path: string): Database.Database {
   addColumnIfMissing(db, "sessions", "assessment", "assessment TEXT");
   addColumnIfMissing(db, "sessions", "close_declined_turn", "close_declined_turn INTEGER");
   addColumnIfMissing(db, "sessions", "user_id", "user_id INTEGER");
+  // Fase inti yang diuji, CSV. NULL = semua bab (default, dan isi setiap sesi
+  // yang dibuat sebelum pemilihan fase ada).
+  addColumnIfMissing(db, "sessions", "phases", "phases TEXT");
   addColumnIfMissing(db, "documents", "user_id", "user_id INTEGER");
   addColumnIfMissing(db, "documents", "dossier", "dossier TEXT");
   addColumnIfMissing(db, "documents", "dossier_status", "dossier_status TEXT");

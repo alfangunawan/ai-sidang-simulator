@@ -7,6 +7,7 @@ import {
   CRITIQUE_TRIGGERS,
 } from "../src/questionBank.js";
 import { SIDANG_PHASES } from "../src/phases.js";
+import { MIN_EXAMINER_QUESTIONS } from "../src/sidang.js";
 
 const tok = (s: string) => Math.round(s.length / 2.3);
 
@@ -19,6 +20,18 @@ describe("phaseWindow", () => {
   it("advances as the examiner asks more questions", () => {
     expect(phaseWindow(0)).not.toContain("Hasil & Pembahasan");
     expect(phaseWindow(10)).toContain("Hasil & Pembahasan");
+  });
+
+  // Dulu jendela mentok di [Kesimpulan, Penutup] pada giliran 12 padahal sidang
+  // tidak boleh tutup sebelum 15: tiga giliran terakhir kehabisan bahan selain
+  // fase penutup, dan model merangkum sebelum waktunya.
+  it("keeps a non-closing phase in the window until the sidang may close", () => {
+    const closing = ["Kesimpulan & Kontribusi", "Penutup"];
+    for (let n = 0; n < MIN_EXAMINER_QUESTIONS; n++) {
+      const w = phaseWindow(n);
+      expect(w.some((p) => !closing.includes(p)), `giliran ${n}: ${w.join(", ")}`).toBe(true);
+    }
+    expect(phaseWindow(MIN_EXAMINER_QUESTIONS)).toEqual(closing);
   });
 
   // Fase ditaksir, bukan diketahui. Jendela tiga fase adalah toleransi terhadap

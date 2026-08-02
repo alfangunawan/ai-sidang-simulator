@@ -7,13 +7,11 @@ export function createSession(
   id: string,
   createdAt: string,
   label: string | null,
+  phases: string | null = null,
 ): void {
-  db.prepare("INSERT INTO sessions (id, user_id, created_at, label) VALUES (?,?,?,?)").run(
-    id,
-    userId,
-    createdAt,
-    label,
-  );
+  db.prepare(
+    "INSERT INTO sessions (id, user_id, created_at, label, phases) VALUES (?,?,?,?,?)",
+  ).run(id, userId, createdAt, label, phases);
 }
 
 export interface SessionSummary {
@@ -104,6 +102,7 @@ export interface SessionMeta {
   closed_at: string | null;
   assessment: string | null;
   close_declined_turn: number | null;
+  phases: string | null;
 }
 
 export function getSessionMeta(
@@ -113,7 +112,7 @@ export function getSessionMeta(
 ): SessionMeta | null {
   const row = db
     .prepare(
-      "SELECT status, closed_at, assessment, close_declined_turn FROM sessions WHERE id = ? AND user_id = ?",
+      "SELECT status, closed_at, assessment, close_declined_turn, phases FROM sessions WHERE id = ? AND user_id = ?",
     )
     .get(sessionId, userId) as SessionMeta | undefined;
   return row ?? null;

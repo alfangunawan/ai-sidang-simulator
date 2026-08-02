@@ -57,7 +57,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-  const [setup, setSetup] = useState<0 | 1 | 2>(0);
+  const [setup, setSetup] = useState<0 | 1 | 2 | 3>(0);
+  // Bab yang diuji sesi berikutnya, diteruskan ke SessionPage yang membuat sesinya.
+  const [phases, setPhases] = useState<string[] | undefined>(undefined);
   const [needSkripsi, setNeedSkripsi] = useState(false);
   const [persona, setPersona] = useState<Persona>(DEFAULT_PERSONA);
   // PERSONAS statis jadi nilai awal, fetch menggantinya. Picker dan header
@@ -99,7 +101,7 @@ export default function App() {
   // Every road into a sidang goes through here, so the missing-naskah blocker is
   // asked once, at the door — not at the student's first recording, when the
   // sitting has already begun.
-  async function openSetup(step: 1 | 2 = 1) {
+  async function openSetup(step: 1 | 3 = 1) {
     setResumable(hasStoredSession());
     // Bukan sekadar "naskah ada": tanpa dossier siap, giliran pertama pasti
     // ditolak server, dan mahasiswa baru tahu setelah sidang dimulai. Modal
@@ -120,7 +122,7 @@ export default function App() {
     setTab("beranda");
   }
 
-  async function startSession(p: Persona) {
+  async function startSession(p: Persona, picked: string[]) {
     setStarting(true);
     try {
       await saveSettings({ examiner_mode: p.mode, examiner_type: p.type });
@@ -129,6 +131,7 @@ export default function App() {
       // still run, so this is not worth blocking on.
     }
     setPersona(p);
+    setPhases(picked);
     setStarting(false);
     clearStoredSession();
     setSitting((n) => n + 1);
@@ -246,6 +249,7 @@ export default function App() {
             <SessionPage
               key={sitting}
               personas={personas}
+              phases={phases}
               onClosed={showResult}
               onNewSession={() => {
                 goHome();
@@ -264,7 +268,7 @@ export default function App() {
                 goTab("riwayat");
               }}
               onOpenSettings={() => goTab("pengaturan")}
-              onTestMic={() => openSetup(2)}
+              onTestMic={() => openSetup(3)}
             />
           ))}
 

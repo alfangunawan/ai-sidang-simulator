@@ -52,12 +52,8 @@ export async function jsonOrThrow(res: Response) {
   return data;
 }
 
-export async function createSession(): Promise<string> {
-  const res = await fetch("/api/sessions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
+export async function createSession(phases?: string[]): Promise<string> {
+  const res = await postJson("/api/sessions", phases ? { phases } : {});
   return (await jsonOrThrow(res)).session_id;
 }
 

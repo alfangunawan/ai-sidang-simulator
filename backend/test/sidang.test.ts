@@ -8,6 +8,8 @@ import {
   shouldProposeClose,
   isNonAnswer,
   withNonAnswerNudge,
+  closeFloor,
+  closeStatus,
 } from "../src/sidang.js";
 
 describe("isNonAnswer", () => {
@@ -55,6 +57,33 @@ describe("stripCloseMarker", () => {
     const out = stripCloseMarker("Apa kontribusi utama Anda?");
     expect(out.hasMarker).toBe(false);
     expect(out.reply).toBe("Apa kontribusi utama Anda?");
+  });
+});
+
+describe("closeStatus", () => {
+  it("forbids closing and names the shortfall while below the floor", () => {
+    const s = closeStatus(MIN_EXAMINER_QUESTIONS - 4, null);
+    expect(s).toContain("BELUM boleh ditutup");
+    expect(s).toContain("4 pertanyaan lagi");
+    expect(s).toContain("DILARANG merangkum");
+    expect(s).not.toContain(CLOSE_MARKER);
+  });
+
+  it("allows closing and names the marker once the floor is reached", () => {
+    const s = closeStatus(MIN_EXAMINER_QUESTIONS, null);
+    expect(s).toContain("batas minimum terpenuhi");
+    expect(s).toContain(CLOSE_MARKER);
+    expect(s).not.toContain("BELUM boleh ditutup");
+  });
+
+  // Sesi yang menolak tutup dulu menerima tiga penutup identik, bukan
+  // pertanyaan baru, karena model tidak tahu gerbangnya bergeser.
+  it("re-forbids closing during the cooldown after a decline", () => {
+    const declinedTurn = MIN_EXAMINER_QUESTIONS + 5;
+    expect(closeFloor(declinedTurn)).toBe(declinedTurn + CLOSE_COOLDOWN);
+    const s = closeStatus(declinedTurn, declinedTurn);
+    expect(s).toContain("BELUM boleh ditutup");
+    expect(s).toContain(`${CLOSE_COOLDOWN} pertanyaan lagi`);
   });
 });
 

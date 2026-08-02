@@ -76,7 +76,111 @@ describe("turn route — marker + close guard", () => {
     await agent
       .post(`/sessions/${id}/turn`)
       .send({ transcript: "Skor SUS saya 78 dari 20 responden." });
-    expect(sent[1]).toBe("Skor SUS saya 78 dari 20 responden.");
+    expect(sent[1]).toContain("Skor SUS saya 78 dari 20 responden.");
+    expect(sent[1]).not.toContain(NON_ANSWER_NUDGE);
+    expect(getTurns(db, id)[2]).toEqual({
+      role: "user",
+      content: "Skor SUS saya 78 dari 20 responden.",
+    });
+  });
+
+  // Tanpa ini model tidak tahu ada gerbang tutup: ia merangkum kapan pun merasa
+  // cukup, server hanya membuang penandanya, dan penutup itu terkunci di
+  // riwayat. Terlihat di 4 dari 13 sidang uji.
+  it("tells the model how far it still is from the close floor, outside the transcript", async () => {
+    const sent: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: any) => {
+        const msgs = JSON.parse(init.body).messages;
+        sent.push(msgs[msgs.length - 1].content);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: "Pertanyaan?" } }] }),
+        };
+      }) as any,
+    );
+    const { agent, db } = await ready();
+    const id = (await agent.post("/sessions").send({})).body.session_id;
+
+    await agent.post(`/sessions/${id}/turn`).send({ transcript: "jawaban pertama" });
+    expect(sent[0]).toContain("BELUM boleh ditutup");
+    expect(getTurns(db, id)[0].content).toBe("jawaban pertama");
+  });
+
+  // Rangkuman dini bukan cuma giliran terbuang: jatah rangkumannya habis di
+  // situ, dan giliran penutup yang sebenarnya menyusut jadi "Saya catat."
+  it("discards an early closing reply and asks again for a question", async () => {
+    const sent: string[] = [];
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: any) => {
+        const msgs = JSON.parse(init.body).messages;
+        sent.push(msgs[msgs.length - 1].content);
+        call += 1;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            choices: [
+              {
+                message: {
+                  content:
+                    call === 1
+                      ? `Saya rangkum kelemahan utama Anda: metodologi tipis.\n${CLOSE_MARKER}`
+                      : "Berapa iterasi prototyping yang Anda lakukan?",
+                },
+              },
+            ],
+          }),
+        };
+      }) as any,
+    );
+    const { agent, db } = await ready();
+    const id = (await agent.post("/sessions").send({})).body.session_id;
+
+    const turn = await agent.post(`/sessions/${id}/turn`).send({ transcript: "jawaban" });
+
+    expect(call).toBe(2);
+    expect(sent[1]).toContain("DIBUANG");
+    expect(turn.body.reply).toBe("Berapa iterasi prototyping yang Anda lakukan?");
+    expect(turn.body.propose_close).toBe(false);
+    // Penutup dini tidak boleh tersimpan di transkrip.
+    expect(getTurns(db, id).map((t) => t.content)).toEqual([
+      "jawaban",
+      "Berapa iterasi prototyping yang Anda lakukan?",
+    ]);
+  });
+
+  it("keeps a closing reply once the floor is reached", async () => {
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            choices: [{ message: { content: `Saya rangkum kelemahan utama.\n${CLOSE_MARKER}` } }],
+          }),
+        };
+      }) as any,
+    );
+    const { agent } = await ready();
+    // Satu fase inti -> ambang 5 pertanyaan, jadi giliran ke-5 boleh menutup.
+    const id = (await agent.post("/sessions").send({ phases: ["Metodologi"] })).body.session_id;
+
+    for (let i = 0; i < 4; i++) {
+      await agent.post(`/sessions/${id}/turn`).send({ transcript: `jawaban ${i}` });
+    }
+    const before = call;
+    const last = await agent.post(`/sessions/${id}/turn`).send({ transcript: "jawaban akhir" });
+
+    expect(last.body.propose_close).toBe(true);
+    expect(call - before).toBe(1); // gerbang sudah buka: penutup diterima apa adanya
   });
 
   it("rejects an empty reply and rolls back the student turn", async () => {
