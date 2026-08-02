@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import type Database from "better-sqlite3";
 import { authRouter, requireAuth, requireAdmin } from "./routes/auth.js";
 import { adminRouter } from "./routes/admin.js";
@@ -13,7 +12,10 @@ import { collabRouter } from "./routes/collab.js";
 export function buildApp(db: Database.Database, key: Buffer): express.Express {
   const app = express();
   app.set("trust proxy", 1);
-  app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+  // Tidak ada CORS: prod disajikan satu origin lewat nginx, dan dev lewat proxy
+  // /api milik Vite — browser tidak pernah melihat origin lain. Header
+  // Access-Control-Allow-Origin yang dulu ada di sini justru membuka pembacaan
+  // ber-kredensial untuk halaman mana pun yang disajikan dari localhost:5173.
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => {

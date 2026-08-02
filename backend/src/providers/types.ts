@@ -3,8 +3,12 @@
  * reasoning tokens too, so a tight cap starves the visible answer and the reply
  * comes back empty. The persona keeps replies to ~35 words; the headroom exists
  * purely for reasoning, and unused tokens are not billed.
+ *
+ * 1500 was not enough: in 13 live sidang runs, 3 sessions lost a turn to an
+ * empty reply on deepseek-v4-flash, whose reasoning alone reached 800+ tokens
+ * on the summarising turns.
  */
-export const TURN_MAX_TOKENS = 1500;
+export const TURN_MAX_TOKENS = 3000;
 
 /**
  * Output ceiling for the closing assessment. It must cover reasoning tokens

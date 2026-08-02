@@ -144,7 +144,13 @@ export class OpenAICompatProvider implements LLMProvider {
       choices?: { message?: { content?: string }; finish_reason?: string }[];
       usage?: OpenAICompatUsage;
     };
-    const reply = data.choices?.[0]?.message?.content?.trim() ?? "";
+    // Kehabisan plafon di tengah kalimat: yang tersisa penggalan tanpa tanda
+    // baca. Dibuang, bukan disimpan — persona mewajibkan kalimat utuh, dan
+    // sekali masuk transkrip penggalan itu menetap sepanjang sesi.
+    const reply =
+      data.choices?.[0]?.finish_reason === "length"
+        ? ""
+        : (data.choices?.[0]?.message?.content?.trim() ?? "");
     return { reply, usage: toUsage(data.usage) };
   }
 

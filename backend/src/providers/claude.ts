@@ -58,11 +58,16 @@ export class ClaudeProvider implements LLMProvider {
       ],
     });
 
-    const reply = response.content
-      .filter((b: any) => b.type === "text")
-      .map((b: any) => b.text)
-      .join("")
-      .trim();
+    // Lihat catatan yang sama di openaiCompat: balasan yang terpotong di tengah
+    // kalimat dibuang, tidak disimpan sebagai penggalan.
+    const reply =
+      response.stop_reason === "max_tokens"
+        ? ""
+        : response.content
+            .filter((b: any) => b.type === "text")
+            .map((b: any) => b.text)
+            .join("")
+            .trim();
 
     return { reply, usage: toUsage(response.usage) };
   }

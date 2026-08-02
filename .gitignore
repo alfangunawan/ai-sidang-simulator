@@ -20,3 +20,6 @@ backend/uploads/
 # misc
 .DS_Store
 *.log
+
+# build output dari tsc test build
+backend/dist-test/
