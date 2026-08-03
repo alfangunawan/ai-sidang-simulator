@@ -13,6 +13,7 @@ import { getEffectiveLlmConfig, resolveSourceUser } from "./effectiveConfig.js";
 import { recordUsage } from "./repos/usage.js";
 import { setDossierPending, setDossierReady, setDossierFailed } from "./repos/documents.js";
 import { CRITIQUE_TRIGGERS } from "./questionBank.js";
+import { SIDANG_PHASES } from "./phases.js";
 
 // Penanda internal: model menyentuh ceiling output sebelum JSON selesai.
 const TRUNCATED = "dossier truncated";
@@ -62,6 +63,7 @@ Aturan keras:
 - "rumusan_masalah", "kesimpulan", dan setiap "hasil_kunci.angka" WAJIB kutipan persis dari naskah. JANGAN memparafrase. Penguji akan menuntut mahasiswa kata per kata; parafrase membuat tuntutan itu salah sasaran.
 - Jangan mengarang. Bila sebuah bagian tidak ada di naskah, isi dengan array kosong, string kosong, atau null.
 - "poin_serangan" berisi inkonsistensi NYATA yang Anda temukan saat membaca: rumusan masalah yang tidak terjawab di kesimpulan, angka yang berbeda antar bab, klaim yang melampaui data, metode yang disebut di Bab 3 tetapi tidak tampak di Bab 4.
+- Setiap poin serangan WAJIB diawali penanda fase sidang tempat poin itu digali, persis salah satu dari: [Latar Belakang & Rumusan Masalah], [Tinjauan Pustaka], [Metodologi], [Hasil & Pembahasan], [Kesimpulan & Kontribusi]. Mahasiswa dapat memilih hanya sebagian bab untuk diuji, dan penanda inilah yang menentukan poin mana yang ikut. Contoh: "[Hasil & Pembahasan] Abstrak menyebut 16 skenario, Tabel V-1 hanya memuat 15."
 - "modul_kritik_terpicu" hanya diisi bila pemicunya benar-benar terpenuhi: "sistem" (skripsi membangun aplikasi/sistem), "kuesioner" (evaluasi memakai UAT/SUS/TAM/kuesioner), "ai" (memakai AI/LLM/chatbot), "domain_sensitif" (kesehatan, kesehatan mental, hukum, keuangan, anak).
 - Ringkas. Seluruh dossier harus di bawah 3.500 token. Panjangkan hanya bagian kutipan verbatim.
 
@@ -87,7 +89,7 @@ Keluarkan HANYA JSON valid (tanpa teks lain, tanpa code fence) dengan bentuk per
     "jumlah_gambar": <angka>
   },
   "modul_kritik_terpicu": ["sistem"],
-  "poin_serangan": ["<inkonsistensi konkret, sebut bab/angkanya>"]
+  "poin_serangan": ["[<fase sidang>] <inkonsistensi konkret, sebut bab/angkanya>"]
 }`;
 }
 
@@ -247,8 +249,27 @@ export async function buildDossier(
 const bullets = (label: string, items: string[]): string =>
   items.length ? `${label}:\n${items.map((x) => `- ${x}`).join("\n")}` : "";
 
+/**
+ * Poin serangan yang relevan bagi agenda sesi ini.
+ *
+ * Tiap poin diawali penanda fase (`[Metodologi] …`). Poin di luar fase terpilih
+ * dibuang: persona menyuruh memprioritaskan poin serangan, jadi poin dari bab
+ * yang tidak diuji akan menarik sidang keluar agenda — terlihat di uji langsung,
+ * sidang "Metodologi saja" membuka dengan tiga pertanyaan tentang skor SUS.
+ *
+ * Poin tanpa penanda dipertahankan apa adanya: dossier yang dibangun sebelum
+ * penanda ini ada tidak boleh mendadak kehilangan seluruh poin serangannya.
+ */
+export function attackPointsFor(points: string[], phases: string[]): string[] {
+  const on = new Set(phases);
+  return points.filter((p) => {
+    const tag = /^\s*\[([^\]]+)\]/.exec(p)?.[1]?.trim();
+    return !tag || on.has(tag);
+  });
+}
+
 /** Render dossier jadi teks prompt. Bagian kosong dibuang, bukan dicetak kosong. */
-export function formatDossier(d: Dossier): string {
+export function formatDossier(d: Dossier, phases: string[] = SIDANG_PHASES): string {
   const f = d.fakta_struktural;
   const parts = [
     `DOSSIER SKRIPSI (rujukan Anda tentang isi naskah)`,
@@ -278,7 +299,7 @@ export function formatDossier(d: Dossier): string {
     ]
       .filter(Boolean)
       .join("\n"),
-    bullets("POIN SERANGAN (prioritaskan)", d.poin_serangan),
+    bullets("POIN SERANGAN (prioritaskan)", attackPointsFor(d.poin_serangan, phases)),
   ];
   return parts.filter(Boolean).join("\n\n");
 }

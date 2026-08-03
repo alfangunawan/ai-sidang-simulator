@@ -7,11 +7,11 @@ import { getEffectiveLlmConfig, resolveSourceUser } from "../effectiveConfig.js"
 import { getActiveDocument, getDossierRow } from "../repos/documents.js";
 import { getChunks } from "../repos/chunks.js";
 import { buildPersona } from "../persona.js";
-import { normalizePhases, sessionPhases } from "../phases.js";
+import { normalizePhases, sessionPhases, pagesForPhases, scheduledPhase } from "../phases.js";
 import { buildPhaseBlock } from "../questionBank.js";
 import { listQuestions } from "../repos/questions.js";
 import { formatDossier, type Dossier } from "../dossier.js";
-import { retrieve, formatExcerpts, formatChunks } from "../retrieval.js";
+import { retrieve, formatExcerpts, formatChunks, scopeToPages } from "../retrieval.js";
 import {
   createSession,
   listSessions,
@@ -39,6 +39,7 @@ import {
   shouldProposeClose,
   withNonAnswerNudge,
   closeStatus,
+  phaseDirective,
   closeFloor,
   looksLikeClosing,
   minQuestions,
@@ -135,15 +136,20 @@ export function sessionsRouter(
         agenda,
       );
       const parsedDossier = JSON.parse(dossierRow.dossier) as Dossier;
-      const dossier = formatDossier(parsedDossier);
-      // Blok fase: contoh pertanyaan untuk fase terdekat + modul kritik yang
-      // benar-benar dipicu skripsi ini. Ditaruh setelah blok yang di-cache.
       const askedSoFar = countExaminerTurns(db, sessionId);
+      // Fase giliran ini ditetapkan server, bukan ditaksir model. Bahan
+      // dipersempit ke fase itu saja — bank pertanyaan, poin serangan, dan
+      // kutipan naskah — supaya penugasannya punya gigi, bukan sekadar imbauan.
+      const turnPhase = scheduledPhase(askedSoFar, agenda, minQuestions(agenda));
+      const ritual = turnPhase === "Pembukaan" || turnPhase === "Penutup";
+      const material = ritual ? agenda : [turnPhase];
+      const dossier = formatDossier(parsedDossier, material);
       const phaseBlock = buildPhaseBlock(
         askedSoFar,
         parsedDossier.modul_kritik_terpicu,
         listQuestions(db),
         agenda,
+        ritual ? undefined : turnPhase,
       );
 
       // Kueri retrieval memakai pertanyaan penguji terakhir DAN jawaban
@@ -151,7 +157,9 @@ export function sessionsRouter(
       // menentukan bagian naskah mana yang perlu dikonfrontasi.
       const lastExaminer = [...history].reverse().find((t) => t.role === "examiner");
       const excerpts = retrieve(
-        getChunks(db, doc.id),
+        // Sidang sebagian: kutipan dibatasi bab yang memang diuji, kalau tidak
+        // potongan naskah dari bab lain menarik penguji keluar agenda.
+        scopeToPages(getChunks(db, doc.id), pagesForPhases(material, parsedDossier.peta_bab)),
         `${lastExaminer?.content ?? ""} ${transcript}`,
       );
 
@@ -167,6 +175,7 @@ export function sessionsRouter(
           history,
           userInput:
             withNonAnswerNudge(transcript) +
+            phaseDirective(turnPhase) +
             closeStatus(askedSoFar, declinedTurn, min) +
             correction +
             formatExcerpts(excerpts),
@@ -278,9 +287,15 @@ export function sessionsRouter(
       // PRD §8 menyebut "chunk paling sering ter-retrieve selama sesi"; satu
       // pencarian dengan transkrip penuh sebagai kueri memberi hasil yang sama
       // tanpa harus mencatat riwayat retrieval tiap giliran.
-      const excerpts = retrieve(getChunks(db, doc.id), transcript, 5);
+      const closeAgenda = sessionPhases(meta?.phases);
+      const closeParsed = JSON.parse(closeDossier.dossier) as Dossier;
+      const excerpts = retrieve(
+        scopeToPages(getChunks(db, doc.id), pagesForPhases(closeAgenda, closeParsed.peta_bab)),
+        transcript,
+        5,
+      );
       const user = buildAssessmentUser(
-        formatDossier(JSON.parse(closeDossier.dossier) as Dossier),
+        formatDossier(closeParsed, closeAgenda),
         transcript,
         formatChunks(excerpts),
         // Hanya untuk sidang sebagian bab: tanpa ini penilai menghukum

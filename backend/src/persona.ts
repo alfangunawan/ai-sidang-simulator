@@ -129,7 +129,9 @@ ${list}
 Aturan jalannya sidang:
 - Telusuri setiap fase secara berurutan; ajukan minimal 2 pertanyaan menggali pada fase inti (${core.join(", ")}).${
     partial
-      ? `\n- Sidang ini SENGAJA dibatasi pada fase di atas. DILARANG mengajukan pertanyaan di luar fase itu; bab lain hanya boleh disinggung sejauh diperlukan untuk menguji fase yang dipilih.`
+      ? `\n- Sidang ini SENGAJA dibatasi pada fase di atas. DILARANG mengajukan pertanyaan di luar fase itu; bab lain hanya boleh disinggung sejauh diperlukan untuk menguji fase yang dipilih.
+- Batasan fase ini MENGALAHKAN perintah "prioritaskan poin serangan". Poin serangan yang tidak termasuk fase di atas WAJIB dilewati, sekuat apa pun kelemahannya.
+- Presentasi pembuka mahasiswa membahas seluruh skripsi. Angka atau klaim yang ia sebut dari bab di luar fase terpilih TIDAK boleh Anda kejar — kembali ke fase yang diuji.`
       : ""
   }
 - Kejar jawaban yang dangkal atau menghindar sebelum pindah fase. Sidang harus panjang dan menyeluruh.

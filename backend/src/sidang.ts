@@ -71,6 +71,25 @@ export function shouldProposeClose(p: {
 }
 
 /**
+ * Fase yang ditugaskan server untuk giliran ini. Ditempel ke pesan user, bukan
+ * blok system — teksnya berubah tiap giliran.
+ *
+ * Larangan agenda tidak pernah menghasilkan cakupan: ia menahan penguji keluar
+ * bab, tapi tidak menyuruhnya masuk ke bab yang belum tergali. Penugasan inilah
+ * sisi positifnya, dan jadwalnya dihitung server sehingga tiap bab terpilih
+ * pasti kebagian.
+ */
+export function phaseDirective(phase: string): string {
+  if (phase === "Pembukaan") {
+    return `\n\n[Fase giliran ini: Pembukaan. Buka sidang dan tanggapi presentasi mahasiswa dengan satu pertanyaan pembuka.]`;
+  }
+  if (phase === "Penutup") {
+    return `\n\n[Fase giliran ini: Penutup. Seluruh bab yang diuji sudah tergali.]`;
+  }
+  return `\n\n[Fase giliran ini: ${phase}. Pertanyaan Anda WAJIB menggali fase itu. Bahan dan kutipan di bawah sudah dipersempit ke bab tersebut — jangan bertanya tentang bab lain di giliran ini.]`;
+}
+
+/**
  * Frasa yang hanya muncul di giliran penutup. Dipakai untuk menahan penutup
  * yang datang terlalu cepat, bukan untuk menilai mutu balasan.
  */

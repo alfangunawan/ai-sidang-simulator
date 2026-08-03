@@ -120,6 +120,23 @@ export function retrieve(chunks: Chunk[], query: string, k = 3): Chunk[] {
   return search(buildIndex(chunks), query, k);
 }
 
+/**
+ * Menyisakan chunk yang jatuh di bab yang sedang diuji. Rentang kosong berarti
+ * agenda lengkap (atau peta bab tak terbaca) — kembalikan apa adanya.
+ *
+ * Chunk tanpa nomor halaman ikut dipertahankan: tidak bisa dipastikan letaknya,
+ * dan membuangnya diam-diam lebih berbahaya daripada menyertakan satu kutipan
+ * di luar bab. Bila penyaringan menyisakan nol chunk, penyaringan dibatalkan —
+ * sidang tanpa kutipan sama sekali jauh lebih buruk daripada kutipan melenceng.
+ */
+export function scopeToPages(chunks: Chunk[], ranges: { from: number; to: number }[]): Chunk[] {
+  if (!ranges.length) return chunks;
+  const kept = chunks.filter(
+    (c) => c.page === null || ranges.some((r) => c.page! >= r.from && c.page! <= r.to),
+  );
+  return kept.length ? kept : chunks;
+}
+
 /** Kutipan berlabel lokasi, siap disitir: "[BAB III METODOLOGI, hlm. 41] …". */
 export function formatChunks(chunks: Chunk[]): string {
   return chunks

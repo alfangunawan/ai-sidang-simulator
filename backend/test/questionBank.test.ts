@@ -85,3 +85,27 @@ describe("buildPhaseBlock", () => {
     expect(worst).toBeLessThan(1800);
   });
 });
+
+// Kewajiban "sentuh minimal sekali" itu perintah berdiri untuk keluar agenda:
+// isi modul condong ke sisi implementasi, jadi sidang satu bab terseret ke
+// Bab IV/V demi memenuhinya.
+describe("critique modules under a partial agenda", () => {
+  const agenda = ["Pembukaan", "Metodologi", "Penutup"];
+
+  it("makes the obligation conditional when only some bab are examined", () => {
+    const b = buildPhaseBlock(0, ["domain_sensitif"], QUESTION_BANK, agenda);
+    expect(b).toContain("HANYA sejauh masuk fase yang sedang diuji");
+    expect(b).not.toContain("wajib disentuh minimal sekali");
+  });
+
+  it("keeps the hard obligation for a full sidang", () => {
+    const b = buildPhaseBlock(0, ["domain_sensitif"]);
+    expect(b).toContain("wajib disentuh minimal sekali");
+  });
+
+  it("still ships the module itself either way", () => {
+    expect(buildPhaseBlock(0, ["domain_sensitif"], QUESTION_BANK, agenda)).toContain(
+      "Pemicu: domain sensitif",
+    );
+  });
+});

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseDossier, formatDossier } from "../src/dossier.js";
+import { parseDossier, formatDossier, attackPointsFor } from "../src/dossier.js";
+import { SIDANG_PHASES } from "../src/phases.js";
 import { SAMPLE_DOSSIER } from "./fixtures/dossier.js";
 
 const minimal = {
@@ -73,5 +74,30 @@ describe("formatDossier", () => {
   // Anggaran §15.2: dossier di atas ~3.500 token memakan jatah kutipan retrieval.
   it("stays well inside the per-turn budget", () => {
     expect(Math.round(formatDossier(SAMPLE_DOSSIER).length / 2.3)).toBeLessThan(3500);
+  });
+});
+
+describe("attackPointsFor", () => {
+  const POINTS = [
+    "[Metodologi] Iterasi prototyping tidak didokumentasikan.",
+    "[Hasil & Pembahasan] Abstrak menyebut 16 skenario, Tabel V-1 memuat 15.",
+    "[Kesimpulan & Kontribusi] Klaim stigma tanpa instrumen pengukur.",
+  ];
+
+  // Persona menyuruh memprioritaskan poin serangan, jadi poin dari bab yang
+  // tidak diuji akan menarik sidang keluar agenda.
+  it("keeps only the points that belong to the chosen phases", () => {
+    expect(attackPointsFor(POINTS, ["Pembukaan", "Metodologi", "Penutup"])).toEqual([POINTS[0]]);
+  });
+
+  it("keeps every point when the whole agenda runs", () => {
+    expect(attackPointsFor(POINTS, SIDANG_PHASES)).toEqual(POINTS);
+  });
+
+  // Dossier yang dibangun sebelum penanda ini ada tidak boleh kehilangan poinnya.
+  it("keeps untagged points regardless of the agenda", () => {
+    expect(attackPointsFor(["Angka berbeda antar bab."], ["Pembukaan", "Metodologi"])).toEqual([
+      "Angka berbeda antar bab.",
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import { SIDANG_PHASES } from "./phases.js";
+import { SIDANG_PHASES, CORE_PHASES } from "./phases.js";
 import { minQuestions } from "./sidang.js";
 
 /**
@@ -122,8 +122,12 @@ export function buildPhaseBlock(
   triggered: string[],
   bank: Record<string, string[]> = QUESTION_BANK,
   agenda: string[] = SIDANG_PHASES,
+  /** Fase yang dijadwalkan server untuk giliran ini; menggantikan taksiran jendela. */
+  focus?: string,
 ): string {
-  const phases = phaseWindow(examinerCount, agenda).filter((p) => bank[p]?.length);
+  const phases = (focus ? [focus] : phaseWindow(examinerCount, agenda)).filter(
+    (p) => bank[p]?.length,
+  );
   const blocks = phases.map((p) => `${p}:\n${bank[p].map((q) => `- ${q}`).join("\n")}`);
   const modules = triggered
     .filter((t) => CRITIQUE_MODULES[t])
@@ -136,8 +140,16 @@ Ambil dari daftar ini, lalu SESUAIKAN dengan isi skripsi mahasiswa — sebut ang
 ${blocks.join("\n\n")}`,
   ];
   if (modules.length) {
+    // Kewajiban "sentuh minimal sekali" itu perintah berdiri untuk keluar
+    // agenda: isi modul condong ke sisi implementasi (penanganan krisis,
+    // halusinasi, privasi), jadi sidang "Metodologi saja" terseret ke Bab IV/V.
+    // Pada agenda parsial kewajibannya dibuat bersyarat, modulnya tetap ada.
+    const partial =
+      agenda.filter((p) => CORE_PHASES.includes(p)).length < CORE_PHASES.length;
     parts.push(
-      `MODUL KRITIK (skripsi ini memicunya — wajib disentuh minimal sekali):\n\n${modules.join("\n\n")}`,
+      partial
+        ? `MODUL KRITIK (skripsi ini memicunya — sentuh HANYA sejauh masuk fase yang sedang diuji; jangan keluar agenda demi modul ini):\n\n${modules.join("\n\n")}`
+        : `MODUL KRITIK (skripsi ini memicunya — wajib disentuh minimal sekali):\n\n${modules.join("\n\n")}`,
     );
   }
   return parts.join("\n\n");

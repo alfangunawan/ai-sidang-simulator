@@ -9,7 +9,8 @@ import { replaceChunks } from "../src/repos/chunks.js";
 import { seedDossier } from "./fixtures/dossier.js";
 import { CRITIQUE_MODULES, QUESTION_BANK } from "../src/questionBank.js";
 import { closeWithAssessment } from "../src/repos/sessions.js";
-import { CLOSE_MARKER, NON_ANSWER_NUDGE } from "../src/sidang.js";
+import { CLOSE_MARKER, NON_ANSWER_NUDGE, minQuestions } from "../src/sidang.js";
+import { scheduledPhase, sessionPhases } from "../src/phases.js";
 import { getTurns } from "../src/repos/sessions.js";
 
 afterEach(() => vi.restoreAllMocks());
@@ -294,18 +295,40 @@ describe("turn route — phase block", () => {
     expect(system.indexOf("AGENDA SIDANG")).toBeLessThan(system.indexOf("BANK PERTANYAAN"));
   });
 
-  it("moves the question bank forward as the sidang progresses", async () => {
+  // Fase tidak lagi ditaksir dari jendela geser: server menugaskannya, dan bahan
+  // giliran itu dipersempit ke fase yang ditugaskan.
+  it("ships only the scheduled phase's question bank each turn", async () => {
     const sent: any[] = [];
     captureBody(sent);
     const { agent } = await ready();
     const id = (await agent.post("/sessions").send({})).body.session_id;
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 6; i++) {
       await agent.post(`/sessions/${id}/turn`).send({ transcript: `jawaban ke-${i}` });
     }
-    const first = sent[0].messages.find((m: any) => m.role === "system").content;
-    const later = sent[8].messages.find((m: any) => m.role === "system").content;
-    expect(first).toContain(QUESTION_BANK["Pembukaan"][0]);
-    expect(later).not.toContain(QUESTION_BANK["Pembukaan"][0]);
-    expect(later).toContain(QUESTION_BANK["Hasil & Pembahasan"][0]);
+    const sys = (n: number) => sent[n].messages.find((m: any) => m.role === "system").content;
+    const agenda = sessionPhases(null);
+    const min = minQuestions(agenda);
+
+    expect(sys(0)).toContain(QUESTION_BANK["Pembukaan"][0]);
+    for (let n = 1; n < 6; n++) {
+      const phase = scheduledPhase(n, agenda, min);
+      expect(sys(n), `giliran ${n} harus membawa bank ${phase}`).toContain(QUESTION_BANK[phase][0]);
+      for (const other of Object.keys(QUESTION_BANK)) {
+        if (other !== phase) expect(sys(n)).not.toContain(QUESTION_BANK[other][0]);
+      }
+    }
+  });
+
+  it("narrows the excerpts to the scheduled phase's chapter", async () => {
+    const sent: any[] = [];
+    captureBody(sent);
+    const { agent } = await ready();
+    const id = (await agent.post("/sessions").send({ phases: ["Metodologi"] })).body.session_id;
+    // Giliran 1 ritual (Pembukaan); giliran 2 sudah masuk Metodologi.
+    await agent.post(`/sessions/${id}/turn`).send({ transcript: "presentasi" });
+    await agent.post(`/sessions/${id}/turn`).send({ transcript: "jawaban" });
+    const user = sent[1].messages.at(-1).content;
+    expect(user).toContain("Fase giliran ini: Metodologi");
+    expect(user).toContain("WAJIB menggali fase itu");
   });
 });
