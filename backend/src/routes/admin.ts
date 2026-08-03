@@ -2,7 +2,7 @@ import { Router } from "express";
 import type Database from "better-sqlite3";
 import { getOverview, listUsers, getUserDetail, deleteUserCompletely, listAllSessions, getSessionForAdmin, listAllCodes } from "../repos/admin.js";
 import { getUserById, setAdmin, setSuspended, countAdmins } from "../repos/users.js";
-import { kickMember } from "../repos/collab.js";
+import { kickMember, getHostCollab, setInviteCode, validateInviteCode } from "../repos/collab.js";
 import { listQuestions, replacePhase } from "../repos/questions.js";
 import { SIDANG_PHASES } from "../phases.js";
 import { listPersonas, upsertPersona, deletePersona } from "../repos/personas.js";
@@ -88,6 +88,20 @@ export function adminRouter(
 
   r.get("/codes", (_req, res) => {
     res.json({ codes: listAllCodes(db) });
+  });
+
+  r.put("/codes/:hostId", (req, res) => {
+    const hostId = req.params.hostId;
+    if (!/^\d+$/.test(hostId)) {
+      return res.status(400).json({ error: "hostId harus berupa angka positif" });
+    }
+    if (!getHostCollab(db, Number(hostId))) {
+      return res.status(404).json({ error: "Kolaborasi tidak ditemukan" });
+    }
+    const v = validateInviteCode(db, req.body?.code, Number(hostId));
+    if ("error" in v) return res.status(v.status).json({ error: v.error });
+    setInviteCode(db, Number(hostId), v.code);
+    res.json({ ok: true });
   });
 
   r.delete("/codes/:hostId/members/:memberId", (req, res) => {

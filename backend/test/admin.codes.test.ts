@@ -62,3 +62,43 @@ describe("GET /admin/codes", () => {
     await budi.agent.get("/admin/codes").expect(403);
   });
 });
+
+describe("PUT /admin/codes/:hostId", () => {
+  it("rewrites any host's code, and the old one stops working", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    const budi = await reg(app, "budi");
+    const citra = await reg(app, "citra");
+    setAdmin(db, admin.id, 1);
+    await budi.agent.post("/collab").expect(200);
+    const old = (await budi.agent.get("/collab")).body.hosting.invite_code;
+
+    await admin.agent.put(`/admin/codes/${budi.id}`).send({ code: "kelas-ta-2026" }).expect(200);
+    expect((await budi.agent.get("/collab")).body.hosting.invite_code).toBe("kelas-ta-2026");
+
+    await citra.agent.post("/collab/join").send({ code: old }).expect(404);
+    await citra.agent.post("/collab/join").send({ code: "kelas-ta-2026" }).expect(200);
+  });
+
+  it("validates the host id, the code, and duplicates", async () => {
+    const { db, app } = ctx();
+    const admin = await reg(app, "alfan");
+    const budi = await reg(app, "budi");
+    setAdmin(db, admin.id, 1);
+    await admin.agent.post("/collab").expect(200);
+    await budi.agent.post("/collab").expect(200);
+    await admin.agent.put(`/admin/codes/${admin.id}`).send({ code: "punya-admin" }).expect(200);
+
+    await admin.agent.put("/admin/codes/abc").send({ code: "kelas-ta-2026" }).expect(400);
+    await admin.agent.put("/admin/codes/9999").send({ code: "kelas-ta-2026" }).expect(404);
+    await admin.agent.put(`/admin/codes/${budi.id}`).send({ code: "abc" }).expect(400);
+    await admin.agent.put(`/admin/codes/${budi.id}`).send({ code: "PUNYA-ADMIN" }).expect(409);
+  });
+
+  it("is 403 for a plain user", async () => {
+    const { app } = ctx();
+    const budi = await reg(app, "budi");
+    await budi.agent.post("/collab").expect(200);
+    await budi.agent.put(`/admin/codes/${budi.id}`).send({ code: "kelas-ta-2026" }).expect(403);
+  });
+});

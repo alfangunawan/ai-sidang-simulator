@@ -54,6 +54,16 @@ export async function listCodes(): Promise<AdminCodeRow[]> {
   return (await jsonOrThrow(await fetch("/api/admin/codes"))).codes;
 }
 
+export async function putCode(hostId: number, code: string): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/admin/codes/${hostId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    }),
+  );
+}
+
 export async function kickMember(hostId: number, memberId: number): Promise<void> {
   await jsonOrThrow(
     await fetch(`/api/admin/codes/${hostId}/members/${memberId}`, { method: "DELETE" }),

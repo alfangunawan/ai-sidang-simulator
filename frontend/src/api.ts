@@ -267,6 +267,16 @@ export async function regenerateCollabCode(): Promise<CollabState> {
   return jsonOrThrow(await postJson("/api/collab/regenerate-code", {}));
 }
 
+export async function setCollabCode(code: string): Promise<CollabState> {
+  return jsonOrThrow(
+    await fetch("/api/collab/code", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    }),
+  );
+}
+
 export async function joinCollab(code: string): Promise<CollabState> {
   return jsonOrThrow(await postJson("/api/collab/join", { code }));
 }

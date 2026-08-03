@@ -32,4 +32,23 @@ describe("Codes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Tendang budi" }));
     await waitFor(() => expect(adminApi.kickMember).toHaveBeenCalledWith(1, 2));
   });
+
+  it("edits a host's code by hand", async () => {
+    const put = vi.spyOn(adminApi, "putCode").mockResolvedValue(undefined as any);
+    render(<Codes />);
+    fireEvent.click(await screen.findByRole("button", { name: "Ubah kode alfan" }));
+    fireEvent.change(screen.getByLabelText("Kode alfan"), { target: { value: " sibiru-2026 " } });
+    fireEvent.click(screen.getByRole("button", { name: /^simpan$/i }));
+    await waitFor(() => expect(put).toHaveBeenCalledWith(1, "sibiru-2026"));
+  });
+
+  it("keeps the form open and shows why the server refused", async () => {
+    vi.spyOn(adminApi, "putCode").mockRejectedValue(new Error("Kode akses sudah dipakai"));
+    render(<Codes />);
+    fireEvent.click(await screen.findByRole("button", { name: "Ubah kode alfan" }));
+    fireEvent.change(screen.getByLabelText("Kode alfan"), { target: { value: "sibiru-2026" } });
+    fireEvent.click(screen.getByRole("button", { name: /^simpan$/i }));
+    expect(await screen.findByText("Kode akses sudah dipakai")).toBeTruthy();
+    expect(screen.getByLabelText("Kode alfan")).toBeTruthy();
+  });
 });

@@ -1,15 +1,48 @@
 import { randomBytes } from "node:crypto";
 import type Database from "better-sqlite3";
 
+export const CODE_RE = /^[A-Za-z0-9_-]{6,32}$/;
+
+function codeOwner(db: Database.Database, code: string): number | null {
+  // COLLATE NOCASE di semua lookup kode: host menyimpan "Sibiru2026", anggota
+  // mengetik "sibiru2026" — keduanya harus menunjuk kolaborasi yang sama, jadi
+  // keduanya juga tidak boleh hidup berdampingan sebagai dua kode berbeda.
+  const row = db
+    .prepare("SELECT host_user_id FROM collaborations WHERE invite_code = ? COLLATE NOCASE")
+    .get(code) as { host_user_id: number } | undefined;
+  return row?.host_user_id ?? null;
+}
+
 export function freshInviteCode(
   db: Database.Database,
   gen: () => string = () => randomBytes(6).toString("hex"),
 ): string {
   for (let i = 0; i < 5; i++) {
     const c = gen();
-    if (!db.prepare("SELECT 1 FROM collaborations WHERE invite_code = ?").get(c)) return c;
+    if (codeOwner(db, c) === null) return c;
   }
   throw new Error("Gagal membuat kode undangan");
+}
+
+/**
+ * Kode buatan tangan lewat dua saringan: bentuknya benar, dan belum dipakai
+ * host lain. Kode milik hostUserId sendiri lolos — menyimpan ulang kode yang
+ * sama (atau hanya mengganti kapitalisasinya) bukan bentrokan.
+ */
+export function validateInviteCode(
+  db: Database.Database,
+  raw: unknown,
+  hostUserId: number,
+): { code: string } | { error: string; status: 400 | 409 } {
+  const code = String(raw ?? "").trim();
+  if (!CODE_RE.test(code)) {
+    return { error: "Kode 6–32 karakter, hanya huruf, angka, strip, dan underscore", status: 400 };
+  }
+  const owner = codeOwner(db, code);
+  if (owner !== null && owner !== hostUserId) {
+    return { error: "Kode akses sudah dipakai", status: 409 };
+  }
+  return { code };
 }
 
 export function getHostCollab(db: Database.Database, hostUserId: number) {
@@ -26,7 +59,7 @@ export function setShares(db: Database.Database, hostUserId: number, s: { share_
   db.prepare("UPDATE collaborations SET share_ai=?, share_tts=?, share_stt=? WHERE host_user_id=?").run(s.share_ai, s.share_tts, s.share_stt, hostUserId);
 }
 
-export function regenerateCode(db: Database.Database, hostUserId: number, code: string): void {
+export function setInviteCode(db: Database.Database, hostUserId: number, code: string): void {
   db.prepare("UPDATE collaborations SET invite_code=? WHERE host_user_id=?").run(code, hostUserId);
 }
 
@@ -47,7 +80,7 @@ export function getMembership(db: Database.Database, memberUserId: number) {
 export function joinByCode(
   db: Database.Database, memberUserId: number, code: string, joinedAt: string,
 ): { ok: true } | { ok: false; reason: "not_found" | "own" | "already" } {
-  const c = db.prepare("SELECT id, host_user_id FROM collaborations WHERE invite_code = ?").get(code) as { id: number; host_user_id: number } | undefined;
+  const c = db.prepare("SELECT id, host_user_id FROM collaborations WHERE invite_code = ? COLLATE NOCASE").get(code) as { id: number; host_user_id: number } | undefined;
   if (!c) return { ok: false, reason: "not_found" };
   if (c.host_user_id === memberUserId) return { ok: false, reason: "own" };
   if (getMembership(db, memberUserId)) return { ok: false, reason: "already" };

@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { openDb } from "../src/db.js";
 import { createUser } from "../src/repos/users.js";
 import {
-  freshInviteCode, getHostCollab, createCollab, setShares, regenerateCode, deleteCollab,
-  getMembership, joinByCode, leave, listMembers, kickMember,
+  freshInviteCode, validateInviteCode, getHostCollab, createCollab, setShares, setInviteCode,
+  deleteCollab, getMembership, joinByCode, leave, listMembers, kickMember,
 } from "../src/repos/collab.js";
 
 function seed() {
@@ -52,7 +52,7 @@ describe("collab repo", () => {
     let calls = 0;
     const code = freshInviteCode(db, () => (calls++ === 0 ? "AAA" : "BBB"));
     expect(code).toBe("BBB");
-    regenerateCode(db, host, "CCC");
+    setInviteCode(db, host, "CCC");
     expect(getHostCollab(db, host)!.invite_code).toBe("CCC");
     joinByCode(db, m1, "CCC", "t");
     deleteCollab(db, host);
@@ -87,6 +87,38 @@ describe("collab repo", () => {
     kickMember(db, hostA, m2);
     expect(getMembership(db, m2)).toBeNull();
     expect(listMembers(db, hostA)).toHaveLength(0);
+  });
+
+  it("matches codes case-insensitively on join", () => {
+    const { db, host, m1 } = seed();
+    createCollab(db, host, "Sibiru2026", "t");
+    expect(joinByCode(db, m1, "SIBIRU2026", "t")).toEqual({ ok: true });
+  });
+
+  it("validateInviteCode rejects bad shapes", () => {
+    const { db, host } = seed();
+    for (const bad of ["", "abc", "kode akses", "sidang@2026", "a".repeat(33), null]) {
+      const v = validateInviteCode(db, bad, host);
+      expect(v).toMatchObject({ status: 400 });
+    }
+    expect(validateInviteCode(db, "  sibiru-2026  ", host)).toEqual({ code: "sibiru-2026" });
+    expect(validateInviteCode(db, "KELAS_A", host)).toEqual({ code: "KELAS_A" });
+  });
+
+  it("validateInviteCode blocks another host's code, ignoring case", () => {
+    const { db, host, m1 } = seed();
+    createCollab(db, host, "sibiru-2026", "t");
+    expect(validateInviteCode(db, "SIBIRU-2026", m1)).toMatchObject({
+      status: 409,
+      error: "Kode akses sudah dipakai",
+    });
+  });
+
+  it("validateInviteCode lets a host re-save its own code", () => {
+    const { db, host } = seed();
+    createCollab(db, host, "sibiru-2026", "t");
+    expect(validateInviteCode(db, "sibiru-2026", host)).toEqual({ code: "sibiru-2026" });
+    expect(validateInviteCode(db, "SIBIRU-2026", host)).toEqual({ code: "SIBIRU-2026" });
   });
 
   it("freshInviteCode throws after 5 collisions", () => {

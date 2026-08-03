@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type Database from "better-sqlite3";
 import {
-  freshInviteCode, getHostCollab, createCollab, setShares, regenerateCode,
+  freshInviteCode, validateInviteCode, getHostCollab, createCollab, setShares, setInviteCode,
   deleteCollab, getMembership, joinByCode, leave, listMembers, kickMember,
 } from "../repos/collab.js";
 import { getKeyUsageView } from "../repos/usage.js";
@@ -9,11 +9,21 @@ import { getUserById } from "../repos/users.js";
 
 const toBit = (v: unknown): 0 | 1 => (v ? 1 : 0);
 
+const MAX_FAILS = 10;
+const LOCKOUT_MS = 10 * 60 * 1000;
+
 export function collabRouter(
   db: Database.Database,
   now: () => string = () => new Date().toISOString(),
 ): Router {
   const r = Router();
+
+  // Kode buatan tangan gampang diingat, jadi gampang ditebak juga — dan kode
+  // inilah yang membuka pinjaman API key host. Rem sederhana: salah kode
+  // MAX_FAILS kali beruntun, akun itu diistirahatkan LOCKOUT_MS.
+  // ponytail: hitungan in-memory, cukup untuk satu proses pm2. Kalau backend
+  // di-scale multi-instance, pindahkan ke tabel atau Redis.
+  const fails = new Map<number, { n: number; until: number }>();
 
   function hostingState(hostUserId: number) {
     const c = getHostCollab(db, hostUserId);
@@ -61,15 +71,39 @@ export function collabRouter(
 
   r.post("/regenerate-code", (req, res) => {
     if (!getHostCollab(db, req.userId!)) return res.status(400).json({ error: "Kamu belum jadi host" });
-    regenerateCode(db, req.userId!, freshInviteCode(db));
+    setInviteCode(db, req.userId!, freshInviteCode(db));
+    res.json({ hosting: hostingState(req.userId!) });
+  });
+
+  r.put("/code", (req, res) => {
+    if (!getHostCollab(db, req.userId!)) return res.status(400).json({ error: "Kamu belum jadi host" });
+    const v = validateInviteCode(db, req.body?.code, req.userId!);
+    if ("error" in v) return res.status(v.status).json({ error: v.error });
+    setInviteCode(db, req.userId!, v.code);
     res.json({ hosting: hostingState(req.userId!) });
   });
 
   r.post("/join", (req, res) => {
+    const rec = fails.get(req.userId!);
+    if (rec?.until) {
+      if (Date.now() < rec.until) {
+        return res.status(429).json({ error: "Terlalu banyak percobaan, coba lagi nanti" });
+      }
+      fails.delete(req.userId!); // masa tunggu habis — hitungan mulai dari nol
+    }
     const code = String(req.body?.code ?? "").trim();
     const result = joinByCode(db, req.userId!, code, now());
-    if (result.ok) return res.json({ joined: joinedState(req.userId!) });
-    if (result.reason === "not_found") return res.status(404).json({ error: "Kode tidak ditemukan" });
+    if (result.ok) {
+      fails.delete(req.userId!);
+      return res.json({ joined: joinedState(req.userId!) });
+    }
+    // Hanya kode yang salah yang dihitung: "sudah tergabung" dan "kolaborasi
+    // sendiri" bocor dari state pemakai, bukan dari menebak-nebak kode.
+    if (result.reason === "not_found") {
+      const n = (fails.get(req.userId!)?.n ?? 0) + 1;
+      fails.set(req.userId!, { n, until: n >= MAX_FAILS ? Date.now() + LOCKOUT_MS : 0 });
+      return res.status(404).json({ error: "Kode tidak ditemukan" });
+    }
     if (result.reason === "own") return res.status(400).json({ error: "Tidak bisa gabung ke kolaborasi sendiri" });
     return res.status(400).json({ error: "Kamu sudah tergabung di sebuah kolaborasi" });
   });

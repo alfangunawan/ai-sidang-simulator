@@ -5,6 +5,7 @@ import {
   disbandCollab,
   setCollabShares,
   regenerateCollabCode,
+  setCollabCode,
   joinCollab,
   leaveCollab,
   kickMember,
@@ -37,6 +38,7 @@ function formatJoined(iso: string): string {
 export function CollabSettings() {
   const [state, setState] = useState<CollabState | null>(null);
   const [code, setCode] = useState("");
+  const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +46,11 @@ export function CollabSettings() {
       .then(setState)
       .catch((e) => setErr((e as Error).message));
   }, []);
+
+  // Kotak kode adalah input yang bisa ditulis sendiri, jadi nilai tersimpan
+  // harus mengalir balik ke sana — termasuk setelah Regenerate menggantinya.
+  const savedCode = state?.hosting?.invite_code ?? "";
+  useEffect(() => setDraft(savedCode), [savedCode]);
 
   async function run<T>(fn: () => Promise<T>, apply: (result: T) => void) {
     setErr(null);
@@ -59,6 +66,8 @@ export function CollabSettings() {
 
   const onBecomeHost = () => run(becomeHost, (r) => patchHosting(r.hosting));
   const onRegenerate = () => run(regenerateCollabCode, (r) => patchHosting(r.hosting));
+  const onSaveCode = () =>
+    run(() => setCollabCode(draft.trim()), (r) => patchHosting(r.hosting));
   const onKick = (memberUserId: number) =>
     run(() => kickMember(memberUserId), (r) => patchHosting(r.hosting));
   const onDisband = () => run(disbandCollab, () => patchHosting(null));
@@ -118,11 +127,24 @@ export function CollabSettings() {
         {hosting && (
           <>
             <div>
-              <div className="mb-2 text-sm font-medium">Kode undangan Anda</div>
+              <Label htmlFor="collab-own-code" className="mb-2 block text-sm font-medium">
+                Kode undangan Anda
+              </Label>
               <div className="flex flex-wrap items-center gap-2">
-                <code className="rounded-md border bg-muted px-3 py-1.5 font-mono text-sm">
-                  {hosting.invite_code}
-                </code>
+                <Input
+                  id="collab-own-code"
+                  value={draft}
+                  className="w-56 font-mono"
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && draft.trim() !== savedCode && onSaveCode()}
+                />
+                <Button
+                  size="sm"
+                  onClick={onSaveCode}
+                  disabled={!draft.trim() || draft.trim() === savedCode}
+                >
+                  Simpan
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -134,6 +156,10 @@ export function CollabSettings() {
                   Regenerate
                 </Button>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Tulis sendiri biar gampang diingat — 6–32 karakter, huruf, angka, strip, dan
+                underscore. Huruf besar/kecil tidak dibedakan saat anggota memasukkannya.
+              </p>
             </div>
 
             <div>
