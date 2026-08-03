@@ -24,11 +24,11 @@ describe("buildDossier when the model call fails", () => {
     const key = randomBytes(32);
     const userId = createUser(db, "mahasiswa", "hash", "t");
     saveSettings(db, userId, key, { api_key: "sk-x", provider: "openrouter", model: "x/y" });
-    const documentId = replaceDocument(db, userId, "skripsi.pdf", "isi naskah", "t");
+    const documentId = replaceDocument(db, userId, "skripsi.pdf", "isi naskah", "t", key);
 
     await buildDossier(db, userId, key, documentId, "isi naskah", () => "t");
 
-    const row = getDossierRow(db, documentId);
+    const row = getDossierRow(db, documentId, key);
     expect(row?.dossier_status).toBe("failed");
     // Sebab yang bisa ditindaklanjuti ikut tersimpan — bukan "gagal" telanjang
     // yang membuat user mengunggah ulang PDF yang sebenarnya tidak bersalah.

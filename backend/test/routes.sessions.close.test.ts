@@ -43,9 +43,10 @@ async function readyWithDb() {
     "thesis.pdf",
     "NASKAH LENGKAP YANG TIDAK BOLEH DIKIRIM",
     "2026-01-01T00:00:00Z",
+    key,
   );
-  seedDossier(db, documentId);
-  return { agent, db, documentId };
+  seedDossier(db, documentId, key);
+  return { agent, db, documentId, key };
 }
 
 function stubOnce(contents: string[]) {
@@ -177,11 +178,11 @@ describe("close route — dossier instead of the full thesis", () => {
         };
       }) as any,
     );
-    const { agent, db, documentId } = await readyWithDb();
+    const { agent, db, documentId, key } = await readyWithDb();
     replaceChunks(db, documentId, [
       { idx: 0, page: 62, heading: "BAB IV HASIL", text: "Skor SUS 78 dari 20 responden mahasiswa." },
       { idx: 1, page: 9, heading: "BAB I", text: "Bagian yang tidak dibahas sama sekali di sidang." },
-    ]);
+    ], key);
     const id = (await agent.post("/sessions").send({})).body.session_id;
     await agent.post(`/sessions/${id}/close`).send({});
 
@@ -205,11 +206,11 @@ describe("close route — dossier instead of the full thesis", () => {
         };
       }) as any,
     );
-    const { agent, db, documentId } = await readyWithDb();
+    const { agent, db, documentId, key } = await readyWithDb();
     replaceChunks(db, documentId, [
       { idx: 0, page: 62, heading: "BAB IV", text: "Pengujian SUS melibatkan 20 responden mahasiswa." },
       { idx: 1, page: 9, heading: "BAB I", text: "Kajian tentang fotosintesis tumbuhan tropis." },
-    ]);
+    ], key);
     const id = (await agent.post("/sessions").send({})).body.session_id;
     await agent.post(`/sessions/${id}/turn`).send({ transcript: "Skor SUS saya 78 dari 20 responden." });
     await agent.post(`/sessions/${id}/close`).send({});
@@ -221,7 +222,7 @@ describe("close route — dossier instead of the full thesis", () => {
   });
 
   it("refuses to score while the dossier is not ready", async () => {
-    const { agent, db, documentId } = await readyWithDb();
+    const { agent, db, documentId, key } = await readyWithDb();
     const id = (await agent.post("/sessions").send({})).body.session_id;
     setDossierPending(db, documentId);
     const res = await agent.post(`/sessions/${id}/close`).send({});

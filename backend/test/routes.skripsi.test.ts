@@ -47,6 +47,40 @@ describe("skripsi routes", () => {
     expect(res.status).toBe(400);
   });
 
+  // mimetype dan ekstensi dikirim klien; isi berkasnya tidak. Keduanya bisa
+  // dipalsukan dengan satu curl, jadi yang diuji adalah penolakan berdasarkan
+  // isi — bukan berdasarkan apa yang diklaim klien.
+  it("415s a non-PDF even when it claims to be one", async () => {
+    const agent = await app();
+    const res = await agent
+      .post("/skripsi")
+      .attach("file", Buffer.from("MZ\x90\x00 bukan pdf"), {
+        filename: "thesis.pdf",
+        contentType: "application/pdf",
+      });
+    expect(res.status).toBe(415);
+    expect(res.body.error).toBe("File harus PDF");
+  });
+
+  it("415s a file whose mimetype is not PDF", async () => {
+    const agent = await app();
+    const res = await agent
+      .post("/skripsi")
+      .attach("file", Buffer.from("halo"), { filename: "x.txt", contentType: "text/plain" });
+    expect(res.status).toBe(415);
+  });
+
+  // memoryStorage: tanpa batas, satu akun bisa menghabiskan memori proses.
+  it("413s a file over the size limit", async () => {
+    const agent = await app();
+    const tooBig = Buffer.alloc(26 * 1024 * 1024, 0x20);
+    Buffer.from("%PDF-").copy(tooBig);
+    const res = await agent
+      .post("/skripsi")
+      .attach("file", tooBig, { filename: "big.pdf", contentType: "application/pdf" });
+    expect(res.status).toBe(413);
+  });
+
   it("re-upload replaces the previous document (<=1 row)", async () => {
     const a = await app();
     await a.post("/skripsi").attach("file", samplePdf, "first.pdf");
@@ -79,8 +113,9 @@ describe("dossier endpoints", () => {
       "thesis.pdf",
       "ISI",
       "2026-01-01T00:00:00Z",
+      key,
     );
-    return { agent, db, documentId };
+    return { agent, db, documentId, key };
   }
 
   it("returns null before any document is uploaded", async () => {
@@ -91,8 +126,8 @@ describe("dossier endpoints", () => {
   });
 
   it("serves the stored dossier with its status and model", async () => {
-    const { agent, db, documentId } = await withDoc();
-    seedDossier(db, documentId);
+    const { agent, db, documentId, key } = await withDoc();
+    seedDossier(db, documentId, key);
     const res = await agent.get("/skripsi/dossier");
     expect(res.body.status).toBe("ready");
     expect(res.body.model).toBe("test/model");
@@ -100,8 +135,8 @@ describe("dossier endpoints", () => {
   });
 
   it("accepts an edited dossier and serves it back", async () => {
-    const { agent, db, documentId } = await withDoc();
-    seedDossier(db, documentId);
+    const { agent, db, documentId, key } = await withDoc();
+    seedDossier(db, documentId, key);
     const edited = { ...SAMPLE_DOSSIER, poin_serangan: ["poin baru"] };
     expect((await agent.put("/skripsi/dossier").send(edited)).status).toBe(200);
     expect((await agent.get("/skripsi/dossier")).body.dossier.poin_serangan).toEqual(["poin baru"]);
@@ -110,8 +145,8 @@ describe("dossier endpoints", () => {
   // Suntingan manual lewat jalur validasi yang sama dengan keluaran model —
   // dossier hasil edit tidak boleh bisa melanggar bentuk yang ditolak dari model.
   it("rejects an edit that strips judul or rumusan_masalah", async () => {
-    const { agent, db, documentId } = await withDoc();
-    seedDossier(db, documentId);
+    const { agent, db, documentId, key } = await withDoc();
+    seedDossier(db, documentId, key);
     const res = await agent.put("/skripsi/dossier").send({ ...SAMPLE_DOSSIER, judul: "" });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/judul dan minimal satu rumusan masalah/);

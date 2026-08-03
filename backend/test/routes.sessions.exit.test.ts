@@ -23,7 +23,8 @@ async function ready() {
   });
   seedDossier(
     db,
-    replaceDocument(db, body.user.id, "thesis.pdf", "ISI SKRIPSI", "2026-01-01T00:00:00Z"),
+    replaceDocument(db, body.user.id, "thesis.pdf", "ISI SKRIPSI", "2026-01-01T00:00:00Z", key),
+    key,
   );
   return { agent, db };
 }

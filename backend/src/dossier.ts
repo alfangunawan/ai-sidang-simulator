@@ -228,7 +228,7 @@ export async function buildDossier(
       }
     }
 
-    setDossierReady(db, documentId, JSON.stringify(dossier), DOSSIER_VERSION, cfg.model);
+    setDossierReady(db, documentId, JSON.stringify(dossier), DOSSIER_VERSION, cfg.model, key);
   } catch (err) {
     const msg = (err as Error).message;
     console.error("[dossier build failed]", msg);

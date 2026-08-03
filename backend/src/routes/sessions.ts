@@ -103,11 +103,11 @@ export function sessionsRouter(
     if (getSetting(db, resolveSourceUser(db, userId, "ai"), "api_key") === null) {
       return res.status(400).json({ error: "Set API key di Settings dulu (atau gabung kolaborasi yang membagikan AI)" });
     }
-    const doc = getActiveDocument(db, userId);
+    const doc = getActiveDocument(db, userId, key);
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
-    const dossierRow = getDossierRow(db, doc.id);
+    const dossierRow = getDossierRow(db, doc.id, key);
     // Tidak ada jatuh-balik diam-diam ke full_text: itu menyembunyikan kegagalan
     // dan mengembalikan biaya 147k token per giliran tanpa user tahu.
     if (dossierRow?.dossier_status !== "ready" || !dossierRow.dossier) {
@@ -159,7 +159,7 @@ export function sessionsRouter(
       const excerpts = retrieve(
         // Sidang sebagian: kutipan dibatasi bab yang memang diuji, kalau tidak
         // potongan naskah dari bab lain menarik penguji keluar agenda.
-        scopeToPages(getChunks(db, doc.id), pagesForPhases(material, parsedDossier.peta_bab)),
+        scopeToPages(getChunks(db, doc.id, key), pagesForPhases(material, parsedDossier.peta_bab)),
         `${lastExaminer?.content ?? ""} ${transcript}`,
       );
 
@@ -267,11 +267,11 @@ export function sessionsRouter(
     if (getSetting(db, resolveSourceUser(db, userId, "ai"), "api_key") === null) {
       return res.status(400).json({ error: "Set API key di Settings dulu (atau gabung kolaborasi yang membagikan AI)" });
     }
-    const doc = getActiveDocument(db, userId);
+    const doc = getActiveDocument(db, userId, key);
     if (!doc) {
       return res.status(400).json({ error: "Upload skripsi (PDF) dulu" });
     }
-    const closeDossier = getDossierRow(db, doc.id);
+    const closeDossier = getDossierRow(db, doc.id, key);
     if (closeDossier?.dossier_status !== "ready" || !closeDossier.dossier) {
       return res.status(400).json({
         error: "Dossier skripsi belum siap. Buka Pengaturan untuk membangun ulang.",
@@ -290,7 +290,7 @@ export function sessionsRouter(
       const closeAgenda = sessionPhases(meta?.phases);
       const closeParsed = JSON.parse(closeDossier.dossier) as Dossier;
       const excerpts = retrieve(
-        scopeToPages(getChunks(db, doc.id), pagesForPhases(closeAgenda, closeParsed.peta_bab)),
+        scopeToPages(getChunks(db, doc.id, key), pagesForPhases(closeAgenda, closeParsed.peta_bab)),
         transcript,
         5,
       );

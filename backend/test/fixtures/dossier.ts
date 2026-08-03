@@ -30,6 +30,7 @@ export const SAMPLE_DOSSIER: Dossier = {
 export function seedDossier(
   db: Database.Database,
   documentId: number,
+  key: Buffer,
   over: Partial<Dossier> = {},
 ): void {
   setDossierReady(
@@ -38,5 +39,6 @@ export function seedDossier(
     JSON.stringify({ ...SAMPLE_DOSSIER, ...over }),
     DOSSIER_VERSION,
     "test/model",
+    key,
   );
 }

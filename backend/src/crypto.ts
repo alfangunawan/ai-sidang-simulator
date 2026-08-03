@@ -21,3 +21,18 @@ export function decrypt(blob: string, key: Buffer): string {
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
 }
+
+/**
+ * Untuk naskah skripsi: baris yang tidak bisa dibuka diperlakukan seperti tidak
+ * ada, bukan dilempar. Dua kasus nyata yang tertutup di sini — baris lama yang
+ * ditulis sebelum kolomnya dienkripsi, dan ENCRYPTION_KEY yang berganti. Efeknya
+ * user diminta unggah ulang; alternatifnya 500 di setiap request sampai ada yang
+ * membersihkan tabel secara manual.
+ */
+export function tryDecrypt(blob: string, key: Buffer): string | null {
+  try {
+    return decrypt(blob, key);
+  } catch {
+    return null;
+  }
+}

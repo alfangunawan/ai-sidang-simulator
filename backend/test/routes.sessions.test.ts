@@ -20,7 +20,7 @@ async function ready() {
   const userId = body.user.id;
   // configure openrouter so the turn goes through global fetch (easy to stub)
   saveSettings(db, userId, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
-  seedDossier(db, replaceDocument(db, userId, "thesis.pdf", "ISI SKRIPSI LENGKAP", "2026-01-01T00:00:00Z"));
+  seedDossier(db, replaceDocument(db, userId, "thesis.pdf", "ISI SKRIPSI LENGKAP", "2026-01-01T00:00:00Z", key), key);
   return agent;
 }
 
@@ -67,7 +67,7 @@ describe("sessions routes", () => {
     const { body } = await agent
       .post("/auth/register")
       .send({ username: "tester", password: "password1" });
-    seedDossier(db, replaceDocument(db, body.user.id, "t.pdf", "isi", "2026-01-01T00:00:00Z"));
+    seedDossier(db, replaceDocument(db, body.user.id, "t.pdf", "isi", "2026-01-01T00:00:00Z", key), key);
     const created = await agent.post("/sessions").send({});
     const res = await agent
       .post(`/sessions/${created.body.session_id}/turn`)

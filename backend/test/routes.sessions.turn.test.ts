@@ -25,9 +25,9 @@ async function ready() {
     .send({ username: "tester", password: "password1" });
   const userId = body.user.id;
   saveSettings(db, userId, key, { provider: "openrouter", model: "x/y", api_key: "or-key" });
-  const documentId = replaceDocument(db, userId, "thesis.pdf", "ISI SKRIPSI", "2026-01-01T00:00:00Z");
-  seedDossier(db, documentId);
-  return { agent, db, documentId };
+  const documentId = replaceDocument(db, userId, "thesis.pdf", "ISI SKRIPSI", "2026-01-01T00:00:00Z", key);
+  seedDossier(db, documentId, key);
+  return { agent, db, documentId, key };
 }
 
 function stubReply(content: string) {
@@ -210,11 +210,11 @@ describe("turn route — marker + close guard", () => {
         };
       }) as any,
     );
-    const { agent, db, documentId } = await ready();
+    const { agent, db, documentId, key } = await ready();
     replaceChunks(db, documentId, [
       { idx: 0, page: 62, heading: "BAB IV HASIL", text: "Pengujian SUS melibatkan 113 responden mahasiswa." },
       { idx: 1, page: 12, heading: "BAB I", text: "Latar belakang membahas prevalensi kecemasan." },
-    ]);
+    ], key);
     const id = (await agent.post("/sessions").send({})).body.session_id;
 
     await agent.post(`/sessions/${id}/turn`).send({ transcript: "Pengujian saya pakai SUS." });
@@ -230,7 +230,7 @@ describe("turn route — marker + close guard", () => {
 
   it("refuses a turn while the dossier is not ready", async () => {
     stubReply("Pertanyaan?");
-    const { agent, db, documentId } = await ready();
+    const { agent, db, documentId, key } = await ready();
     setDossierPending(db, documentId);
     const id = (await agent.post("/sessions").send({})).body.session_id;
 
@@ -269,8 +269,8 @@ describe("turn route — phase block", () => {
   it("sends only the critique modules this skripsi triggered", async () => {
     const sent: any[] = [];
     captureBody(sent);
-    const { agent, db, documentId } = await ready();
-    seedDossier(db, documentId, { modul_kritik_terpicu: ["kuesioner"] });
+    const { agent, db, documentId, key } = await ready();
+    seedDossier(db, documentId, key, { modul_kritik_terpicu: ["kuesioner"] });
     const id = (await agent.post("/sessions").send({})).body.session_id;
     await agent.post(`/sessions/${id}/turn`).send({ transcript: "jawab" });
 

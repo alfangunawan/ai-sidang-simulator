@@ -271,6 +271,14 @@ export function CollabSettings() {
               {!!joined.shares.share_tts && <Badge variant="secondary">TTS</Badge>}
               {!!joined.shares.share_stt && <Badge variant="secondary">STT</Badge>}
             </div>
+            {/* Sisi member yang perlu tahu: memakai kunci host berarti naskahnya
+                lewat akun host, dan tampak di dasbor serta tagihan host. */}
+            {!!joined.shares.share_ai && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sidang Anda memakai kunci AI milik {joined.host_username}, jadi isi
+                naskah Anda melewati akun penyedia model mereka.
+              </p>
+            )}
             <Button
               variant="ghost"
               size="sm"

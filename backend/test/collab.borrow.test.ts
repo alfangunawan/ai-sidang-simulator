@@ -32,7 +32,8 @@ async function reg(a: any, username: string) {
 describe("member borrows host AI key", () => {
   it("uses host key server-side, records key_owner=host, never exposes the key", async () => {
     const db = openDb(":memory:");
-    const app = buildApp(db, randomBytes(32));
+    const key = randomBytes(32);
+    const app = buildApp(db, key);
     const host = await reg(app, "host");
     const member = await reg(app, "member");
 
@@ -48,7 +49,7 @@ describe("member borrows host AI key", () => {
     await member.agent.post("/collab/join").send({ code }).expect(200);
 
     // seed the member's document directly — avoids PDF-upload flakiness
-    seedDossier(db, replaceDocument(db, member.id, "s.pdf", "isi skripsi", "t"));
+    seedDossier(db, replaceDocument(db, member.id, "s.pdf", "isi skripsi", "t", key), key);
 
     const session = await member.agent.post("/sessions").send({}).expect(200);
     const turn = await member.agent

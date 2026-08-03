@@ -1,8 +1,18 @@
 import type Database from "better-sqlite3";
+import { encrypt, tryDecrypt } from "../crypto.js";
 
+/**
+ * `full_text` dan `dossier` berisi naskah skripsi yang belum terbit — milik
+ * orang lain, bukan milik aplikasi. Keduanya disimpan terenkripsi (AES-256-GCM,
+ * kunci sama dengan API key di settings) supaya file SQLite yang bocor, atau
+ * salinan cadangan yang tertinggal, tidak sama dengan seluruh naskah terbaca.
+ * `filename` dan `char_count` sengaja dibiarkan terbuka: dipakai untuk daftar
+ * dan tidak mengungkap isi.
+ */
 export function getActiveDocument(
   db: Database.Database,
   userId: number,
+  key: Buffer,
 ): {
   id: number;
   filename: string;
@@ -15,7 +25,13 @@ export function getActiveDocument(
       "SELECT id, filename, full_text, char_count, created_at FROM documents WHERE user_id = ? ORDER BY id DESC LIMIT 1",
     )
     .get(userId) as any;
-  return row ?? null;
+  if (!row) return null;
+  const full_text = tryDecrypt(row.full_text, key);
+  if (full_text === null) {
+    console.warn(`[documents] naskah ${row.id} tidak bisa didekripsi — dianggap tidak ada`);
+    return null;
+  }
+  return { ...row, full_text };
 }
 
 // Mengembalikan id baris baru: chunk dan (nanti) dossier menggantung padanya.
@@ -26,14 +42,19 @@ export function replaceDocument(
   filename: string,
   fullText: string,
   createdAt: string,
+  key: Buffer,
 ): number {
+  // char_count dihitung dari plaintext: yang dilihat user panjang naskah, bukan
+  // panjang ciphertext.
+  const charCount = fullText.length;
+  const blob = encrypt(fullText, key);
   const tx = db.transaction(() => {
     db.prepare("DELETE FROM documents WHERE user_id = ?").run(userId);
     return db
       .prepare(
         "INSERT INTO documents (user_id, filename, full_text, char_count, created_at) VALUES (?,?,?,?,?)",
       )
-      .run(userId, filename, fullText, fullText.length, createdAt).lastInsertRowid as number;
+      .run(userId, filename, blob, charCount, createdAt).lastInsertRowid as number;
   });
   return tx();
 }
@@ -52,13 +73,18 @@ export interface DossierRow {
   dossier_model: string | null;
 }
 
-export function getDossierRow(db: Database.Database, documentId: number): DossierRow | null {
+export function getDossierRow(
+  db: Database.Database,
+  documentId: number,
+  key: Buffer,
+): DossierRow | null {
   const row = db
     .prepare(
       "SELECT dossier, dossier_status, dossier_error, dossier_version, dossier_model FROM documents WHERE id = ?",
     )
     .get(documentId) as DossierRow | undefined;
-  return row ?? null;
+  if (!row) return null;
+  return { ...row, dossier: row.dossier === null ? null : tryDecrypt(row.dossier, key) };
 }
 
 export function setDossierPending(db: Database.Database, documentId: number): void {
@@ -73,10 +99,11 @@ export function setDossierReady(
   json: string,
   version: number,
   model: string,
+  key: Buffer,
 ): void {
   db.prepare(
     "UPDATE documents SET dossier = ?, dossier_status = 'ready', dossier_error = NULL, dossier_version = ?, dossier_model = ? WHERE id = ?",
-  ).run(json, version, model, documentId);
+  ).run(encrypt(json, key), version, model, documentId);
 }
 
 export function setDossierFailed(

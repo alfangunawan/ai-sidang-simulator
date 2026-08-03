@@ -124,6 +124,12 @@ export function SkripsiModal({ onClose, onReady }: Props) {
             yang benar-benar ada di sana. Unggah PDF skripsi di sini, lalu sidang
             bisa dilanjutkan.
           </DialogDescription>
+          {/* Naskah keluar ke penyedia model. Itu inheren pada cara alat ini
+              bekerja, tapi user berhak tahu sebelum mengunggah — bukan sesudah. */}
+          <p className="text-xs text-muted-foreground">
+            Isi naskah disimpan terenkripsi, dan dikirim ke penyedia model yang Anda
+            pilih di Pengaturan untuk dianalisis.
+          </p>
         </DialogHeader>
 
         {/* Kartu naskah tetap terlihat di semua keadaan, termasuk gagal: file-nya
