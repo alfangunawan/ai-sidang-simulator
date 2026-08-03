@@ -16,6 +16,11 @@ build/
 *.db
 backend/data/
 backend/uploads/
+# Naskah skripsi yang dipakai untuk uji coba. Repo ini publik dan naskahnya
+# milik penulisnya, bukan milik proyek — satu `git add .` sudah cukup untuk
+# menerbitkannya secara permanen.
+*.pdf
+!backend/test/fixtures/*.pdf
 
 # misc
 .DS_Store
